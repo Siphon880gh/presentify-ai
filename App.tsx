@@ -166,8 +166,13 @@ const App: React.FC = () => {
     setStatusMessage('Refining slide with AI...');
     try {
       const currentSlide = presentation.slides[currentSlideIndex];
-      const newSlide = await refineSlide(presentation.title, tempRegenPrompt);
-      updateSlide({ ...newSlide, transitionType: currentSlide.transitionType });
+      const refinedData = await refineSlide(presentation.title, tempRegenPrompt);
+      const newSlide: Slide = {
+        ...currentSlide,
+        ...refinedData,
+        id: currentSlide.id, // Explicitly preserve ID
+      };
+      updateSlide(newSlide);
       setShowRegenSlideModal(false);
     } catch (error) {
       console.error(error);
@@ -578,7 +583,7 @@ const App: React.FC = () => {
                         </svg>
                       </button>
                       {/* Hover Bridge and Dropdown */}
-                      <div className="absolute bottom-full right-0 hidden group-hover/regen-drop:block z-50 animate-in fade-in slide-in-from-bottom-2">
+                      <div className="absolute bottom-full right-0 hidden group-hover/regen-drop:block z-[60] animate-in fade-in slide-in-from-bottom-2">
                         <div className="pb-2 w-56 h-2 bg-transparent"></div> {/* Bridge to prevent hover flicker */}
                         <div className="bg-white shadow-2xl border border-slate-100 rounded-xl p-1 w-56">
                           <button 

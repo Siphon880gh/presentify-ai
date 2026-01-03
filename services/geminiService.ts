@@ -47,13 +47,13 @@ export const generatePresentation = async (prompt: string): Promise<any> => {
   return JSON.parse(response.text || "{}");
 };
 
-export const refineSlide = async (topic: string, refinementPrompt: string): Promise<Slide> => {
+export const refineSlide = async (topic: string, refinementPrompt: string): Promise<Partial<Slide>> => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `You are a professional presentation designer. Refine this slide for a presentation about "${topic}". 
     User Refinement Request: "${refinementPrompt}"
     
-    Ensure the layout is appropriate for the new content.`,
+    Ensure the layout is appropriate for the new content. Return a JSON object with title, subtitle, content (array), layout, transitionType, and imagePrompt.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -83,15 +83,14 @@ export const refineSlide = async (topic: string, refinementPrompt: string): Prom
   const slideData = JSON.parse(response.text || "{}");
   return {
     ...slideData,
-    id: Math.random().toString(36).substr(2, 9),
     imageUrl: slideData.imagePrompt ? `https://picsum.photos/seed/${encodeURIComponent(slideData.imagePrompt)}/800/600` : undefined
   };
 };
 
-export const regenerateSlide = async (topic: string, slideContext: string): Promise<Slide> => {
+export const regenerateSlide = async (topic: string, slideContext: string): Promise<Partial<Slide>> => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Regenerate a single slide for a presentation about ${topic}. The slide focus is: ${slideContext}. Include an appropriate transition type.`,
+    contents: `Regenerate a single slide for a presentation about ${topic}. The slide focus is: ${slideContext}. Include an appropriate transition type. Return a JSON object with title, subtitle, content (array), layout, transitionType, and imagePrompt.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -121,7 +120,6 @@ export const regenerateSlide = async (topic: string, slideContext: string): Prom
   const slideData = JSON.parse(response.text || "{}");
   return {
     ...slideData,
-    id: Math.random().toString(36).substr(2, 9),
     imageUrl: slideData.imagePrompt ? `https://picsum.photos/seed/${encodeURIComponent(slideData.imagePrompt)}/800/600` : undefined
   };
 };
