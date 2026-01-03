@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Slide, SlideLayout } from '../types';
 
 interface SlideRendererProps {
@@ -17,17 +17,33 @@ const RichTextEditor: React.FC<{
   placeholder?: string;
 }> = ({ value, onUpdate, className, placeholder }) => {
   const [isFocused, setIsFocused] = useState(false);
-  const [activeStyles, setActiveStyles] = useState<{ [key: string]: boolean }>({});
+  const [activeStyles, setActiveStyles] = useState<{ [key: string]: any }>({});
   const editorRef = useRef<HTMLDivElement>(null);
-  const lastValueRef = useRef(value);
+  
+  // Ref to track what is currently in the DOM to prevent redundant/resetting updates
+  const internalValueRef = useRef(value);
 
-  // Populate on mount and when value changes from external source (e.g. AI update)
-  useEffect(() => {
-    if (editorRef.current && (editorRef.current.innerHTML !== value)) {
+  // 1. Initial Content Setup: useLayoutEffect runs before paint to prevent "blank" flicker
+  useLayoutEffect(() => {
+    if (editorRef.current) {
       editorRef.current.innerHTML = value || '';
-      lastValueRef.current = value;
+      internalValueRef.current = value || '';
     }
-  }, [value]);
+  }, []); // Only run on mount. Slide switches are handled by 'key' in parent.
+
+  // 2. External Sync: Handle AI updates or other external prop changes
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    // Only update DOM manually if the prop differs from our internal tracking
+    // AND we aren't focused (typing). This prevents cursor jumps.
+    if (value !== internalValueRef.current) {
+      if (!isFocused) {
+        editorRef.current.innerHTML = value || '';
+        internalValueRef.current = value || '';
+      }
+    }
+  }, [value, isFocused]);
 
   const checkStyles = () => {
     setActiveStyles({
@@ -36,18 +52,22 @@ const RichTextEditor: React.FC<{
       underline: document.queryCommandState('underline'),
       strikethrough: document.queryCommandState('strikethrough'),
       list: document.queryCommandState('insertUnorderedList'),
+      fontSize: document.queryCommandValue('fontSize'),
     });
   };
 
-  const applyFormat = (command: string) => {
-    document.execCommand(command, false);
+  const applyFormat = (command: string, arg?: string) => {
+    document.execCommand(command, false, arg);
     checkStyles();
     editorRef.current?.focus();
+    if (editorRef.current) {
+      internalValueRef.current = editorRef.current.innerHTML;
+    }
   };
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
-    const content = target.innerHTML;
+    let content = target.innerHTML;
     
     // Check for inline image shortcut
     if (target.innerText.toLowerCase().includes('::img')) {
@@ -64,22 +84,38 @@ const RichTextEditor: React.FC<{
         </div>
       `;
       
-      const newHtml = content.replace(/::img/gi, placeholderHtml);
-      target.innerHTML = newHtml;
-      lastValueRef.current = newHtml;
-
-      // Restore cursor to the end
+      content = content.replace(/::img/gi, placeholderHtml);
+      target.innerHTML = content;
+      
       const range = document.createRange();
       range.selectNodeContents(target);
       range.collapse(false);
       selection.removeAllRanges();
       selection.addRange(range);
-    } else {
-      lastValueRef.current = content;
     }
     
+    internalValueRef.current = content;
     checkStyles();
   };
+
+  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    setIsFocused(false);
+    const currentHtml = e.currentTarget.innerHTML;
+    internalValueRef.current = currentHtml;
+    if (currentHtml !== value) {
+      onUpdate(currentHtml);
+    }
+  };
+
+  const fontSizes = [
+    { label: 'Tiny', value: '1' },
+    { label: 'Small', value: '2' },
+    { label: 'Normal', value: '3' },
+    { label: 'Large', value: '4' },
+    { label: 'X-Large', value: '5' },
+    { label: 'XX-Large', value: '6' },
+    { label: 'Huge', value: '7' },
+  ];
 
   return (
     <div className="relative w-full group">
@@ -88,31 +124,37 @@ const RichTextEditor: React.FC<{
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('bold'); }}
             className={`w-8 h-8 flex items-center justify-center rounded font-bold transition-colors ${activeStyles.bold ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
-            title="Bold (Ctrl+B)"
+            title="Bold"
           >
             B
           </button>
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('italic'); }}
-            className={`w-8 h-8 flex items-center justify-center rounded italic font-serif transition-colors ${activeStyles.italic ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
-            title="Italic (Ctrl+I)"
+            className={`w-8 h-8 flex items-center justify-center rounded italic transition-colors ${activeStyles.italic ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
+            title="Italic"
           >
             I
           </button>
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('underline'); }}
             className={`w-8 h-8 flex items-center justify-center rounded underline transition-colors ${activeStyles.underline ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
-            title="Underline (Ctrl+U)"
+            title="Underline"
           >
             U
           </button>
-          <button 
-            onMouseDown={(e) => { e.preventDefault(); applyFormat('strikethrough'); }}
-            className={`w-8 h-8 flex items-center justify-center rounded line-through transition-colors ${activeStyles.strikethrough ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
-            title="Strikethrough"
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          
+          <select 
+            className="text-[10px] font-bold h-8 px-2 rounded bg-slate-50 border-transparent hover:bg-slate-100 transition-colors outline-none cursor-pointer text-slate-600"
+            value={activeStyles.fontSize || '3'}
+            onChange={(e) => applyFormat('fontSize', e.target.value)}
+            onMouseDown={(e) => e.stopPropagation()} 
           >
-            S
-          </button>
+            {fontSizes.map(size => (
+              <option key={size.value} value={size.value}>{size.label}</option>
+            ))}
+          </select>
+
           <div className="w-px h-4 bg-slate-200 mx-1" />
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('insertUnorderedList'); }}
@@ -123,8 +165,6 @@ const RichTextEditor: React.FC<{
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <div className="w-px h-4 bg-slate-200 mx-1" />
-          <div className="px-2 text-[10px] font-bold text-indigo-400">Type "::img" for image</div>
         </div>
       )}
       <div
@@ -138,12 +178,7 @@ const RichTextEditor: React.FC<{
         onInput={handleInput}
         onKeyUp={checkStyles}
         onMouseUp={checkStyles}
-        onBlur={(e) => {
-          setIsFocused(false);
-          const currentHtml = e.currentTarget.innerHTML;
-          lastValueRef.current = currentHtml;
-          onUpdate(currentHtml);
-        }}
+        onBlur={handleBlur}
         className={`${className} focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded transition-all min-h-[1em]`}
       />
       {!value && !isFocused && placeholder && (
@@ -283,6 +318,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
                   <div key={`${slide.id}-item-${i}`} className="flex items-start group">
                     <span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" />
                     <RichTextEditor 
+                      key={`${slide.id}-content-${i}`}
                       value={item}
                       onUpdate={(val) => handleContentChange(i, val)}
                       className="text-lg text-gray-600 flex-1"
@@ -311,6 +347,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
                   <div key={`${slide.id}-item-${i}`} className="flex items-start group">
                     <span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" />
                     <RichTextEditor 
+                      key={`${slide.id}-content-${i}`}
                       value={item}
                       onUpdate={(val) => handleContentChange(i, val)}
                       className="text-lg text-gray-600 flex-1"
@@ -362,6 +399,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
                     <div key={`${slide.id}-item-${i}`} className="flex items-start group">
                       <span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" />
                       <RichTextEditor 
+                        key={`${slide.id}-content-${i}`}
                         value={item}
                         onUpdate={(val) => handleContentChange(i, val)}
                         className="text-lg text-gray-600 flex-1"
@@ -378,6 +416,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
                       <div key={`${slide.id}-item-${idx}`} className="flex items-start group">
                         <span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" />
                         <RichTextEditor 
+                          key={`${slide.id}-content-${idx}`}
                           value={item}
                           onUpdate={(val) => handleContentChange(idx, val)}
                           className="text-lg text-gray-600 flex-1"
@@ -407,6 +446,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
                   <div key={`${slide.id}-item-${i}`} className="flex items-start p-2 hover:bg-gray-50 transition-colors rounded group">
                     <span className="mr-3 mt-2 w-3 h-3 bg-indigo-500 rounded-full flex-shrink-0" />
                     <RichTextEditor 
+                      key={`${slide.id}-content-${i}`}
                       value={item}
                       onUpdate={(val) => handleContentChange(i, val)}
                       className="text-xl text-gray-700 flex-1"
