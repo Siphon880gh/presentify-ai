@@ -28,6 +28,14 @@ The `RichTextEditor` uses browser-native `contentEditable` for rich formatting. 
   2. The editor is **NOT** focused (`!isFocused`).
 - This ensures that while the user is typing, the DOM is left alone. When the user blurs or a different slide is selected, synchronization resumes safely.
 
-### 4. Event Handling
+### 4. Toolbar Persistence During Interaction
+**Problem:** Clicking a dropdown (like font size) or a button in the formatting toolbar can trigger a `blur` event on the `contentEditable` div, closing the toolbar prematurely.
+**Solution:**
+- Wrap the editor and toolbar in a common container `div`.
+- Track focus at the container level.
+- Use the `relatedTarget` property in the `onBlur` event to check if the new focus target is still within the container. If it is, do not set `isFocused` to false.
+- This allows users to interact with toolbar controls without the popover disappearing.
+
+### 5. Event Handling
 - Use `onInput` to update `internalValueRef` in real-time.
-- Use `onBlur` to trigger the parent's `onUpdate` state change. This keeps parent re-renders to a minimum.
+- Use `onBlur` (at the container level) to trigger the parent's `onUpdate` state change. This keeps parent re-renders to a minimum.

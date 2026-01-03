@@ -19,6 +19,7 @@ const RichTextEditor: React.FC<{
   const [isFocused, setIsFocused] = useState(false);
   const [activeStyles, setActiveStyles] = useState<{ [key: string]: any }>({});
   const editorRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   // Ref to track what is currently in the DOM to prevent redundant/resetting updates
   const internalValueRef = useRef(value);
@@ -98,12 +99,24 @@ const RichTextEditor: React.FC<{
     checkStyles();
   };
 
-  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+  const handleFocus = () => {
+    setIsFocused(true);
+    checkStyles();
+  };
+
+  const handleBlur = (e: React.FocusEvent) => {
+    // If focus is moving to something inside our component (like the toolbar), don't close it
+    if (containerRef.current && containerRef.current.contains(e.relatedTarget as Node)) {
+      return;
+    }
+    
     setIsFocused(false);
-    const currentHtml = e.currentTarget.innerHTML;
-    internalValueRef.current = currentHtml;
-    if (currentHtml !== value) {
-      onUpdate(currentHtml);
+    if (editorRef.current) {
+      const currentHtml = editorRef.current.innerHTML;
+      internalValueRef.current = currentHtml;
+      if (currentHtml !== value) {
+        onUpdate(currentHtml);
+      }
     }
   };
 
@@ -118,7 +131,12 @@ const RichTextEditor: React.FC<{
   ];
 
   return (
-    <div className="relative w-full group">
+    <div 
+      ref={containerRef}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      className="relative w-full group"
+    >
       {isFocused && (
         <div className="absolute -top-12 left-0 flex items-center bg-white shadow-xl border border-slate-200 rounded-lg p-1 z-30 space-x-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <button 
@@ -148,7 +166,6 @@ const RichTextEditor: React.FC<{
             className="text-[10px] font-bold h-8 px-2 rounded bg-slate-50 border-transparent hover:bg-slate-100 transition-colors outline-none cursor-pointer text-slate-600"
             value={activeStyles.fontSize || '3'}
             onChange={(e) => applyFormat('fontSize', e.target.value)}
-            onMouseDown={(e) => e.stopPropagation()} 
           >
             {fontSizes.map(size => (
               <option key={size.value} value={size.value}>{size.label}</option>
@@ -171,14 +188,9 @@ const RichTextEditor: React.FC<{
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
-        onFocus={() => {
-          setIsFocused(true);
-          checkStyles();
-        }}
         onInput={handleInput}
         onKeyUp={checkStyles}
         onMouseUp={checkStyles}
-        onBlur={handleBlur}
         className={`${className} focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded transition-all min-h-[1em]`}
       />
       {!value && !isFocused && placeholder && (
