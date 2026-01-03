@@ -25,10 +25,31 @@ const RichTextEditor: React.FC<{
   const saveTimeoutRef = useRef<number | null>(null);
   
   const internalValueRef = useRef(value);
+  const savedSelectionRef = useRef<Range | null>(null);
   
   // History management
   const historyRef = useRef<string[]>([value]);
   const historyIndexRef = useRef<number>(0);
+  
+  // Save selection when it changes within the editor
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && editorRef.current?.contains(selection.anchorNode)) {
+      savedSelectionRef.current = selection.getRangeAt(0).cloneRange();
+    }
+  };
+
+  // Restore saved selection
+  const restoreSelection = () => {
+    if (savedSelectionRef.current && editorRef.current) {
+      editorRef.current.focus();
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(savedSelectionRef.current);
+      }
+    }
+  };
 
   const saveToHistory = (content: string) => {
     if (content === historyRef.current[historyIndexRef.current]) return;
@@ -85,22 +106,112 @@ const RichTextEditor: React.FC<{
   }, [value, isFocused]);
 
   const checkStyles = () => {
+    // Check if content has bullet or number prefixes
+    let hasBullets = false;
+    let hasNumbers = false;
+    if (editorRef.current) {
+      const text = editorRef.current.innerText || '';
+      const bulletPattern = /^[•·\-\*]\s/m;
+      const numberPattern = /^\d+\.\s/m;
+      hasBullets = bulletPattern.test(text);
+      hasNumbers = numberPattern.test(text);
+    }
+
     setActiveStyles({
       bold: document.queryCommandState('bold'),
       italic: document.queryCommandState('italic'),
       underline: document.queryCommandState('underline'),
       strikethrough: document.queryCommandState('strikethrough'),
-      list: document.queryCommandState('insertUnorderedList'),
+      list: hasBullets,
+      orderedList: hasNumbers,
       fontSize: document.queryCommandValue('fontSize'),
+      alignLeft: document.queryCommandState('justifyLeft'),
+      alignCenter: document.queryCommandState('justifyCenter'),
+      alignRight: document.queryCommandState('justifyRight'),
       canUndo: historyIndexRef.current > 0,
       canRedo: historyIndexRef.current < historyRef.current.length - 1,
     });
   };
 
+  const applyList = (listType: 'ul' | 'ol') => {
+    if (!editorRef.current) return;
+    
+    // Get current HTML and convert to lines
+    let html = editorRef.current.innerHTML;
+    
+    // Normalize line breaks - convert <br>, </div>, </p> to a marker
+    const BREAK_MARKER = '{{BR}}';
+    html = html
+      .replace(/<br\s*\/?>/gi, BREAK_MARKER)
+      .replace(/<\/div>/gi, BREAK_MARKER)
+      .replace(/<\/p>/gi, BREAK_MARKER);
+    
+    // Remove HTML tags but keep the break markers
+    const textWithMarkers = html.replace(/<[^>]*>/g, '');
+    
+    // Split into lines
+    const lines = textWithMarkers.split(BREAK_MARKER);
+    
+    // Regex patterns for detecting existing list prefixes
+    const bulletPattern = /^[•·\-\*]\s*/;
+    const numberPattern = /^\d+\.\s*/;
+    
+    // Check if lines already have this list type
+    const hasBullets = lines.some(line => bulletPattern.test(line.trim()));
+    const hasNumbers = lines.some(line => numberPattern.test(line.trim()));
+    
+    let newLines: string[];
+    
+    if (listType === 'ul') {
+      if (hasBullets) {
+        // Remove bullets
+        newLines = lines.map(line => line.replace(bulletPattern, ''));
+      } else {
+        // Add bullets (and remove numbers if present)
+        newLines = lines.map(line => {
+          const cleaned = line.replace(numberPattern, '').replace(bulletPattern, '');
+          return cleaned.trim() ? '• ' + cleaned : cleaned;
+        });
+      }
+    } else {
+      if (hasNumbers) {
+        // Remove numbers
+        newLines = lines.map(line => line.replace(numberPattern, ''));
+      } else {
+        // Add numbers (and remove bullets if present)
+        let num = 1;
+        newLines = lines.map(line => {
+          const cleaned = line.replace(bulletPattern, '').replace(numberPattern, '');
+          if (cleaned.trim()) {
+            return `${num++}. ${cleaned}`;
+          }
+          return cleaned;
+        });
+      }
+    }
+    
+    // Join back with <br> tags
+    const newHtml = newLines.join('<br>');
+    editorRef.current.innerHTML = newHtml;
+    internalValueRef.current = newHtml;
+    saveToHistory(newHtml);
+    checkStyles();
+  };
+
   const applyFormat = (command: string, arg?: string) => {
+    // Handle list commands specially
+    if (command === 'insertUnorderedList') {
+      applyList('ul');
+      return;
+    }
+    if (command === 'insertOrderedList') {
+      applyList('ol');
+      return;
+    }
+    
+    restoreSelection();
     document.execCommand(command, false, arg);
     checkStyles();
-    editorRef.current?.focus();
     if (editorRef.current) {
       internalValueRef.current = editorRef.current.innerHTML;
       saveToHistory(internalValueRef.current);
@@ -261,8 +372,55 @@ const RichTextEditor: React.FC<{
             className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.list ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
             title="Bullet List"
           >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="4" cy="6" r="2" />
+              <circle cx="4" cy="12" r="2" />
+              <circle cx="4" cy="18" r="2" />
+              <rect x="9" y="5" width="12" height="2" rx="1" />
+              <rect x="9" y="11" width="12" height="2" rx="1" />
+              <rect x="9" y="17" width="12" height="2" rx="1" />
+            </svg>
+          </button>
+          <button 
+            onMouseDown={(e) => { e.preventDefault(); applyFormat('insertOrderedList'); }}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.orderedList ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
+            title="Numbered List"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <text x="2" y="8" fontSize="7" fontWeight="bold">1</text>
+              <text x="2" y="14" fontSize="7" fontWeight="bold">2</text>
+              <text x="2" y="20" fontSize="7" fontWeight="bold">3</text>
+              <rect x="9" y="5" width="12" height="2" rx="1" />
+              <rect x="9" y="11" width="12" height="2" rx="1" />
+              <rect x="9" y="17" width="12" height="2" rx="1" />
+            </svg>
+          </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <button 
+            onMouseDown={(e) => { e.preventDefault(); applyFormat('justifyLeft'); }}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.alignLeft ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
+            title="Align Left"
+          >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h16" />
+            </svg>
+          </button>
+          <button 
+            onMouseDown={(e) => { e.preventDefault(); applyFormat('justifyCenter'); }}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.alignCenter ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
+            title="Align Center"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M7 12h10M4 18h16" />
+            </svg>
+          </button>
+          <button 
+            onMouseDown={(e) => { e.preventDefault(); applyFormat('justifyRight'); }}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.alignRight ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
+            title="Align Right"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M10 12h10M4 18h16" />
             </svg>
           </button>
         </div>
@@ -273,8 +431,8 @@ const RichTextEditor: React.FC<{
         suppressContentEditableWarning
         onInput={handleInput}
         onKeyDown={handleKeyDown}
-        onKeyUp={checkStyles}
-        onMouseUp={checkStyles}
+        onKeyUp={() => { checkStyles(); saveSelection(); }}
+        onMouseUp={() => { checkStyles(); saveSelection(); }}
         className={`${className} focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded transition-all min-h-[1em]`}
       />
       {!value && !isFocused && placeholder && (

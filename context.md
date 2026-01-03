@@ -54,6 +54,13 @@ The app uses a multi-key storage strategy to avoid quota limitations from large 
 
 The `RichTextEditor` uses browser-native `contentEditable` for rich formatting.
 
+## Toolbar Features
+- **Formatting:** Bold, Italic, Underline
+- **Font Size:** 7 sizes (Tiny to Huge)
+- **Lists:** Bullet list, Numbered list
+- **Alignment:** Left, Center, Right
+- **History:** Undo/Redo with keyboard shortcuts
+
 ## Strict Rules & Solutions
 1. **No `dangerouslySetInnerHTML`**: Manage `innerHTML` manually through `editorRef`.
 2. **Preventing "Blank Text" on Mount**: Use `useLayoutEffect` to set `innerHTML` synchronously.
