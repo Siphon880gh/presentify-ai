@@ -94,6 +94,7 @@ const EditorView: React.FC = () => {
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [savedLibrary, setSavedLibrary] = useState<SavedPresentationMeta[]>([]);
+  const [isFullscreenPresenting, setIsFullscreenPresenting] = useState(false);
   
   const exportContainerRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -618,10 +619,51 @@ const EditorView: React.FC = () => {
     setShowImagePromptModal(true);
   };
 
-  const openPresenterMode = () => {
+  const openPresenterMode = async () => {
     syncToCurrentStorage();
-    window.open('#/present', 'PresenterWindow', 'width=1200,height=800');
+    try {
+      await document.documentElement.requestFullscreen();
+      setIsFullscreenPresenting(true);
+    } catch (e) {
+      console.error('Fullscreen request failed', e);
+    }
   };
+
+  const exitPresenterMode = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    }
+    setIsFullscreenPresenting(false);
+  };
+
+  // Listen for fullscreen exit (e.g., user presses Escape)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullscreenPresenting(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Keyboard navigation for fullscreen presenter mode
+  useEffect(() => {
+    if (!isFullscreenPresenting || !presentation) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        setCurrentSlideIndex(prev => Math.min(presentation.slides.length - 1, prev + 1));
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        setCurrentSlideIndex(prev => Math.max(0, prev - 1));
+      } else if (e.key === 'Escape') {
+        exitPresenterMode();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreenPresenting, presentation]);
 
   const activeSlide = useMemo(() => {
     if (!presentation || !presentation.slides) return null;
@@ -1114,6 +1156,66 @@ const EditorView: React.FC = () => {
             )}
             <div className="flex justify-end mt-6 pt-4 border-t">
               <button onClick={() => setShowOpenModal(false)} className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Presenter Mode */}
+      {isFullscreenPresenting && presentation && activeSlide && (
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col">
+          <div className="flex-1 flex items-center justify-center">
+            <div className="w-full h-full max-w-[100vw] max-h-[100vh] aspect-video">
+              <SlideRenderer 
+                slide={activeSlide} 
+                onUpdate={() => {}} 
+                isActive={true} 
+                disableTransitions={false}
+                transitionType={activeSlide.transitionType}
+              />
+            </div>
+          </div>
+          
+          {/* Minimal controls overlay - appears on hover */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300">
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <button 
+                onClick={() => setCurrentSlideIndex(prev => Math.max(0, prev - 1))}
+                disabled={currentSlideIndex === 0}
+                className="p-3 bg-white/10 hover:bg-white/20 disabled:opacity-20 rounded-full transition-all text-white"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              
+              <div className="flex items-center space-x-4">
+                <span className="text-white/80 font-mono text-lg">
+                  {currentSlideIndex + 1} / {presentation.slides.length}
+                </span>
+              </div>
+              
+              <div className="flex items-center space-x-3">
+                <button 
+                  onClick={() => setCurrentSlideIndex(prev => Math.min(presentation.slides.length - 1, prev + 1))}
+                  disabled={currentSlideIndex === presentation.slides.length - 1}
+                  className="p-3 bg-white/10 hover:bg-white/20 disabled:opacity-20 rounded-full transition-all text-white"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                
+                <button 
+                  onClick={exitPresenterMode}
+                  className="p-3 bg-red-500/80 hover:bg-red-500 rounded-full transition-all text-white"
+                  title="Exit Fullscreen (Esc)"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>

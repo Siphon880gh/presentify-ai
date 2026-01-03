@@ -24,9 +24,11 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ## 3. Architecture & Code Flow
 
-### Presenter Mode Synchronization
-- **Mechanism:** Leverages `localStorage` combined with the browser's `storage` event.
-- **Flow:** When the user navigates or edits in the `EditorView`, the state is saved to `localStorage`. The `PresenterView` listens for these changes and updates its UI in real-time. Navigation in the `PresenterView` also updates `localStorage`.
+### Presenter Mode (Fullscreen)
+- **Mechanism:** Uses the browser's Fullscreen API (`document.documentElement.requestFullscreen()`) to display slides in fullscreen mode within the same window.
+- **Flow:** Clicking "Present" requests fullscreen and renders a minimal slide view with hidden controls. Controls (prev/next, slide counter, exit) appear on hover at the bottom of the screen.
+- **Navigation:** Arrow keys (Left/Right), Space, PageUp/PageDown for slide navigation. Escape exits fullscreen.
+- **State Sync:** The `PresenterView` route (`#/present`) still exists for external window use if needed, using `localStorage` for sync.
 
 ### localStorage Schema
 The app uses a multi-key storage strategy to avoid quota limitations from large base64 images:
