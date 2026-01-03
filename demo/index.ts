@@ -1,6 +1,5 @@
 
 import { Presentation, SlideLayout, SlideTransition } from '../types';
-import carImage from './car.png';
 
 export const DEMO_PRESENTATION: Presentation = {
   id: 'demo-123',
@@ -37,7 +36,7 @@ export const DEMO_PRESENTATION: Presentation = {
         'Cities like Oslo and Paris are banning fossil fuel cars by 2030.'
       ],
       layout: SlideLayout.IMAGE_LEFT,
-      imageUrl: carImage,
+      imageUrl: '/demo/car.png',
       imagePrompt: 'Sleek electric car charging at a high-tech station',
       transitionType: SlideTransition.SLIDE
     },
