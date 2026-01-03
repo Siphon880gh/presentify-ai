@@ -17,8 +17,17 @@ const RichTextEditor: React.FC<{
   placeholder?: string;
 }> = ({ value, onUpdate, className, placeholder }) => {
   const [isFocused, setIsFocused] = useState(false);
-  const [activeStyles, setActiveStyles] = useState<{ [key: string]: boolean | string }>({});
+  const [activeStyles, setActiveStyles] = useState<{ [key: string]: boolean }>({});
   const editorRef = useRef<HTMLDivElement>(null);
+  const lastValueRef = useRef(value);
+
+  // Populate on mount and when value changes from external source (e.g. AI update)
+  useEffect(() => {
+    if (editorRef.current && (editorRef.current.innerHTML !== value)) {
+      editorRef.current.innerHTML = value || '';
+      lastValueRef.current = value;
+    }
+  }, [value]);
 
   const checkStyles = () => {
     setActiveStyles({
@@ -27,23 +36,24 @@ const RichTextEditor: React.FC<{
       underline: document.queryCommandState('underline'),
       strikethrough: document.queryCommandState('strikethrough'),
       list: document.queryCommandState('insertUnorderedList'),
-      fontSize: document.queryCommandValue('fontSize'),
     });
   };
 
-  const applyFormat = (command: string, value: string | undefined = undefined) => {
-    document.execCommand(command, false, value);
+  const applyFormat = (command: string) => {
+    document.execCommand(command, false);
     checkStyles();
     editorRef.current?.focus();
   };
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
-    const text = e.currentTarget.innerText;
-    if (text.toLowerCase().includes('::img')) {
+    const target = e.currentTarget;
+    const content = target.innerHTML;
+    
+    // Check for inline image shortcut
+    if (target.innerText.toLowerCase().includes('::img')) {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) return;
       
-      const content = e.currentTarget.innerHTML;
       const placeholderHtml = `
         <div contenteditable="false" class="inline-block w-full h-32 my-4 bg-indigo-50 border-2 border-dashed border-indigo-200 rounded-xl flex flex-col items-center justify-center text-indigo-400 group/img">
           <svg class="w-8 h-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -55,14 +65,20 @@ const RichTextEditor: React.FC<{
       `;
       
       const newHtml = content.replace(/::img/gi, placeholderHtml);
-      e.currentTarget.innerHTML = newHtml;
-      
-      const newRange = document.createRange();
-      newRange.setStartAfter(e.currentTarget.lastChild!);
-      newRange.collapse(true);
+      target.innerHTML = newHtml;
+      lastValueRef.current = newHtml;
+
+      // Restore cursor to the end
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false);
       selection.removeAllRanges();
-      selection.addRange(newRange);
+      selection.addRange(range);
+    } else {
+      lastValueRef.current = content;
     }
+    
+    checkStyles();
   };
 
   return (
@@ -98,30 +114,6 @@ const RichTextEditor: React.FC<{
             S
           </button>
           <div className="w-px h-4 bg-slate-200 mx-1" />
-          <div className="flex items-center bg-slate-50 rounded-md p-0.5 space-x-0.5">
-            <button 
-              onMouseDown={(e) => { e.preventDefault(); applyFormat('fontSize', '2'); }}
-              className={`px-1.5 h-6 text-[10px] flex items-center justify-center rounded transition-colors ${activeStyles.fontSize === '2' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'}`}
-              title="Small Text"
-            >
-              S
-            </button>
-            <button 
-              onMouseDown={(e) => { e.preventDefault(); applyFormat('fontSize', '4'); }}
-              className={`px-1.5 h-6 text-[12px] flex items-center justify-center rounded transition-colors ${activeStyles.fontSize === '4' || !activeStyles.fontSize ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'}`}
-              title="Medium Text"
-            >
-              M
-            </button>
-            <button 
-              onMouseDown={(e) => { e.preventDefault(); applyFormat('fontSize', '6'); }}
-              className={`px-1.5 h-6 text-[14px] flex items-center justify-center rounded transition-colors ${activeStyles.fontSize === '6' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'}`}
-              title="Large Text"
-            >
-              L
-            </button>
-          </div>
-          <div className="w-px h-4 bg-slate-200 mx-1" />
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('insertUnorderedList'); }}
             className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.list ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
@@ -131,6 +123,8 @@ const RichTextEditor: React.FC<{
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <div className="px-2 text-[10px] font-bold text-indigo-400">Type "::img" for image</div>
         </div>
       )}
       <div
@@ -146,9 +140,10 @@ const RichTextEditor: React.FC<{
         onMouseUp={checkStyles}
         onBlur={(e) => {
           setIsFocused(false);
-          onUpdate(e.currentTarget.innerHTML);
+          const currentHtml = e.currentTarget.innerHTML;
+          lastValueRef.current = currentHtml;
+          onUpdate(currentHtml);
         }}
-        dangerouslySetInnerHTML={{ __html: value || '' }}
         className={`${className} focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded transition-all min-h-[1em]`}
       />
       {!value && !isFocused && placeholder && (
@@ -256,12 +251,14 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
         return (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
             <RichTextEditor 
+              key={`${slide.id}-title`}
               value={slide.title}
               onUpdate={(val) => handleFieldChange('title', val)}
               className="text-6xl font-bold text-gray-900"
               placeholder="Title"
             />
             <RichTextEditor 
+              key={`${slide.id}-subtitle`}
               value={slide.subtitle || ''}
               onUpdate={(val) => handleFieldChange('subtitle', val)}
               className="text-2xl text-gray-500"
@@ -276,13 +273,14 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
             <ImageComponent />
             <div className="flex flex-col justify-center space-y-4 overflow-hidden">
               <RichTextEditor 
+                key={`${slide.id}-title`}
                 value={slide.title}
                 onUpdate={(val) => handleFieldChange('title', val)}
                 className="text-4xl font-bold text-gray-800"
               />
               <div className="space-y-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
                 {slide.content.map((item, i) => (
-                  <div key={i} className="flex items-start group">
+                  <div key={`${slide.id}-item-${i}`} className="flex items-start group">
                     <span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" />
                     <RichTextEditor 
                       value={item}
@@ -303,13 +301,14 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
           <div className="grid grid-cols-2 h-full gap-8">
             <div className="flex flex-col justify-center space-y-4 overflow-hidden">
               <RichTextEditor 
+                key={`${slide.id}-title`}
                 value={slide.title}
                 onUpdate={(val) => handleFieldChange('title', val)}
                 className="text-4xl font-bold text-gray-800"
               />
               <div className="space-y-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
                 {slide.content.map((item, i) => (
-                  <div key={i} className="flex items-start group">
+                  <div key={`${slide.id}-item-${i}`} className="flex items-start group">
                     <span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" />
                     <RichTextEditor 
                       value={item}
@@ -331,6 +330,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
           <div className="flex flex-col items-center justify-center h-full max-w-4xl mx-auto space-y-8 italic">
              <div className="text-6xl text-indigo-300 select-none">"</div>
              <RichTextEditor 
+                key={`${slide.id}-content-0`}
                 value={slide.content[0] || ''}
                 onUpdate={(val) => handleContentChange(0, val)}
                 className="text-4xl font-medium text-gray-700 text-center leading-relaxed"
@@ -338,6 +338,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
              />
              <div className="h-1 w-20 bg-indigo-500"></div>
              <RichTextEditor 
+                key={`${slide.id}-title`}
                 value={slide.title}
                 onUpdate={(val) => handleFieldChange('title', val)}
                 className="text-2xl font-bold text-gray-900 not-italic text-center"
@@ -350,6 +351,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
         return (
           <div className="flex flex-col h-full space-y-6">
             <RichTextEditor 
+              key={`${slide.id}-title`}
               value={slide.title}
               onUpdate={(val) => handleFieldChange('title', val)}
               className="text-4xl font-bold text-gray-900 border-b pb-2"
@@ -357,7 +359,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
             <div className="grid grid-cols-2 gap-8 flex-1 overflow-hidden">
               <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
                  {slide.content.slice(0, Math.ceil(slide.content.length / 2)).map((item, i) => (
-                    <div key={i} className="flex items-start group">
+                    <div key={`${slide.id}-item-${i}`} className="flex items-start group">
                       <span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" />
                       <RichTextEditor 
                         value={item}
@@ -373,7 +375,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
                  {slide.content.slice(Math.ceil(slide.content.length / 2)).map((item, i) => {
                     const idx = i + Math.ceil(slide.content.length / 2);
                     return (
-                      <div key={idx} className="flex items-start group">
+                      <div key={`${slide.id}-item-${idx}`} className="flex items-start group">
                         <span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" />
                         <RichTextEditor 
                           value={item}
@@ -394,6 +396,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
         return (
           <div className="flex flex-col h-full space-y-8 overflow-hidden">
             <RichTextEditor 
+              key={`${slide.id}-title`}
               value={slide.title}
               onUpdate={(val) => handleFieldChange('title', val)}
               className="text-5xl font-bold text-gray-900 border-b-2 border-indigo-100 pb-4"
@@ -401,7 +404,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
               <div className="space-y-4">
                 {slide.content.map((item, i) => (
-                  <div key={i} className="flex items-start p-2 hover:bg-gray-50 transition-colors rounded group">
+                  <div key={`${slide.id}-item-${i}`} className="flex items-start p-2 hover:bg-gray-50 transition-colors rounded group">
                     <span className="mr-3 mt-2 w-3 h-3 bg-indigo-500 rounded-full flex-shrink-0" />
                     <RichTextEditor 
                       value={item}
