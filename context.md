@@ -11,10 +11,11 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Framework:** React 19 (via ESM imports)
 - **Styling:** Tailwind CSS (via CDN in `index.html`)
 - **AI Integration:** `@google/genai` (Gemini 3 Flash for text, Gemini 2.5 Flash for images)
+- **Exporting Libraries:** `jspdf` (PDF generation), `html2canvas` (DOM capturing), `pptxgenjs` (PowerPoint generation)
 - **Build Tool:** Vite (with custom define for API keys)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Manages presentation state, slide navigation, drag-and-drop reordering, and modal states. Initial generation and demo loading now use `Promise.all` to generate real AI images for every slide.
+- `App.tsx`: The main orchestrator. Manages presentation state, slide navigation, drag-and-drop reordering, export logic, and modal states.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor` (a complex `contentEditable` wrapper).
 - `services/geminiService.ts`: Abstraction layer for Gemini API calls. Handles structured JSON generation for slides and Base64 image generation via `gemini-2.5-flash-image`.
 - `types.ts`: Defines `SlideLayout`, `SlideTransition`, and the `Presentation` schema.
@@ -23,8 +24,11 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 ## 3. Architecture & Code Flow
 1. **Generation Flow:** User enters a prompt in `App.tsx` (top 20%) -> Calls `generatePresentation` in `geminiService.ts` -> Model returns JSON -> `App` initiates parallel image generation for all slides using `generateImage` -> State updates with complete text and visual content.
 2. **Demo Flow:** `handleLoadDemo` in `App.tsx` triggers parallel AI image generation for predefined demo prompts to ensure matching visuals.
-3. **Editing Flow:** `SlideRenderer` renders the current slide based on `currentSlideIndex`. Title and content items use `RichTextEditor` for formatting.
-4. **Persistence:** `localStorage` is used in `App.tsx` (near the top) to save and reload presentations.
+3. **Export Flow:**
+    - **PDF:** `App.tsx` renders all slides in a hidden off-screen container. `html2canvas` iterates through these elements to create high-resolution snapshots which are then embedded into a `jsPDF` instance.
+    - **PPTX:** `pptxgenjs` programmatically constructs a PowerPoint file by mapping slide layouts to native shapes and text objects.
+4. **Editing Flow:** `SlideRenderer` renders the current slide based on `currentSlideIndex`. Title and content items use `RichTextEditor` for formatting.
+5. **Persistence:** `localStorage` is used in `App.tsx` (near the top) to save and reload presentations.
 
 ---
 

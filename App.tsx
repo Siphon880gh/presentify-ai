@@ -3,6 +3,9 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Presentation, Slide, SlideLayout, SlideTransition } from './types';
 import { generatePresentation, regenerateSlide, generateImage, refineSlide } from './services/geminiService';
 import SlideRenderer from './components/SlideRenderer';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import pptxgen from 'pptxgenjs';
 
 const STORAGE_KEY = 'presentify_saved_presentation';
 
@@ -71,6 +74,7 @@ const App: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isImageGenerating, setIsImageGenerating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [presentation, setPresentation] = useState<Presentation | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
@@ -79,9 +83,23 @@ const App: React.FC = () => {
   const [showImagePromptModal, setShowImagePromptModal] = useState(false);
   const [showRegenSlideModal, setShowRegenSlideModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [tempImagePrompt, setTempImagePrompt] = useState('');
   const [tempRegenPrompt, setTempRegenPrompt] = useState('');
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  
+  const exportContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close export menu on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (showExportMenu && !(e.target as Element).closest('.export-menu-container')) {
+        setShowExportMenu(false);
+      }
+    };
+    window.addEventListener('mousedown', handleOutsideClick);
+    return () => window.removeEventListener('mousedown', handleOutsideClick);
+  }, [showExportMenu]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -183,6 +201,108 @@ const App: React.FC = () => {
       alert('Failed to load demo visuals.');
     } finally {
       setIsImageGenerating(false);
+      setStatusMessage('');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!presentation || !exportContainerRef.current) return;
+    setShowExportMenu(false);
+    setIsExporting(true);
+    setStatusMessage('Preparing high-resolution PDF...');
+
+    try {
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'px',
+        format: [1280, 720]
+      });
+
+      const slideElements = exportContainerRef.current.children;
+      for (let i = 0; i < slideElements.length; i++) {
+        setStatusMessage(`Capturing slide ${i + 1} of ${slideElements.length}...`);
+        const element = slideElements[i] as HTMLElement;
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, 0, 1280, 720);
+      }
+
+      pdf.save(`${presentation.title.replace(/<[^>]*>/g, '').substring(0, 30) || 'Presentation'}.pdf`);
+    } catch (error) {
+      console.error('PDF Export failed:', error);
+      alert('Failed to export PDF.');
+    } finally {
+      setIsExporting(false);
+      setStatusMessage('');
+    }
+  };
+
+  const handleExportPPTX = () => {
+    if (!presentation) return;
+    setShowExportMenu(false);
+    setIsExporting(true);
+    setStatusMessage('Creating PowerPoint file...');
+
+    try {
+      const pptx = new (pptxgen as any)();
+      pptx.title = presentation.title;
+
+      presentation.slides.forEach((slide) => {
+        const pSlide = pptx.addSlide();
+        const cleanTitle = slide.title.replace(/<[^>]*>/g, '');
+        const cleanSubtitle = slide.subtitle?.replace(/<[^>]*>/g, '');
+        const cleanContent = slide.content.map(c => c.replace(/<[^>]*>/g, ''));
+
+        switch (slide.layout) {
+          case SlideLayout.TITLE:
+            pSlide.addText(cleanTitle, { x: 1, y: 2, w: '80%', fontSize: 44, bold: true, align: 'center', color: '333333' });
+            if (cleanSubtitle) pSlide.addText(cleanSubtitle, { x: 1, y: 3.2, w: '80%', fontSize: 24, align: 'center', color: '666666' });
+            break;
+
+          case SlideLayout.BULLETS:
+            pSlide.addText(cleanTitle, { x: 0.5, y: 0.5, w: '90%', fontSize: 32, bold: true, color: '4F46E5' });
+            pSlide.addText(cleanContent.map(text => ({ text, options: { bullet: true, margin: 5 } })), { x: 0.5, y: 1.5, w: '90%', fontSize: 18, color: '444444' });
+            break;
+
+          case SlideLayout.IMAGE_LEFT:
+            if (slide.imageUrl) pSlide.addImage({ data: slide.imageUrl, x: 0.5, y: 1, w: 4, h: 3.5 });
+            pSlide.addText(cleanTitle, { x: 5, y: 1, w: 4.5, fontSize: 28, bold: true, color: '333333' });
+            pSlide.addText(cleanContent.map(text => ({ text, options: { bullet: true } })), { x: 5, y: 2, w: 4.5, fontSize: 16, color: '555555' });
+            break;
+
+          case SlideLayout.IMAGE_RIGHT:
+            pSlide.addText(cleanTitle, { x: 0.5, y: 1, w: 4.5, fontSize: 28, bold: true, color: '333333' });
+            pSlide.addText(cleanContent.map(text => ({ text, options: { bullet: true } })), { x: 0.5, y: 2, w: 4.5, fontSize: 16, color: '555555' });
+            if (slide.imageUrl) pSlide.addImage({ data: slide.imageUrl, x: 5.5, y: 1, w: 4, h: 3.5 });
+            break;
+
+          case SlideLayout.QUOTE:
+            pSlide.addText(`"${cleanContent[0] || ''}"`, { x: 1, y: 1.5, w: '80%', fontSize: 32, italic: true, align: 'center', color: '444444' });
+            pSlide.addText(`— ${cleanTitle}`, { x: 1, y: 3.5, w: '80%', fontSize: 22, bold: true, align: 'center', color: '666666' });
+            break;
+
+          case SlideLayout.TWO_COLUMN:
+            pSlide.addText(cleanTitle, { x: 0.5, y: 0.5, w: '90%', fontSize: 32, bold: true, color: '333333' });
+            const half = Math.ceil(cleanContent.length / 2);
+            pSlide.addText(cleanContent.slice(0, half).map(text => ({ text, options: { bullet: true } })), { x: 0.5, y: 1.5, w: 4.25, fontSize: 16, color: '444444' });
+            pSlide.addText(cleanContent.slice(half).map(text => ({ text, options: { bullet: true } })), { x: 5.25, y: 1.5, w: 4.25, fontSize: 16, color: '444444' });
+            break;
+        }
+      });
+
+      pptx.writeFile({ fileName: `${presentation.title.replace(/<[^>]*>/g, '').substring(0, 30) || 'Presentation'}.pptx` });
+    } catch (error) {
+      console.error('PPTX Export failed:', error);
+      alert('Failed to export PowerPoint.');
+    } finally {
+      setIsExporting(false);
       setStatusMessage('');
     }
   };
@@ -401,12 +521,55 @@ const App: React.FC = () => {
                  </svg>
                  <span>Save</span>
                </button>
-               <button className="flex items-center space-x-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg font-medium hover:bg-indigo-100 transition-colors">
-                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M16 8l-4-4m0 0l-4 4m4-4v12" />
-                 </svg>
-                 <span>Export</span>
-               </button>
+               
+               <div className="relative export-menu-container">
+                  <button 
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                    className="flex items-center bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg font-medium hover:bg-indigo-100 transition-colors shadow-sm"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M16 8l-4-4m0 0l-4 4m4-4v12" />
+                    </svg>
+                    <span>Export</span>
+                    <svg className={`ml-2 w-4 h-4 transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {showExportMenu && (
+                    <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] p-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <button 
+                        onClick={handleExportPDF}
+                        className="w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-indigo-50 rounded-lg transition-colors group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0 group-hover:bg-red-100 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-800">Download as PDF</span>
+                          <span className="text-[10px] text-slate-400">High-fidelity slide capture</span>
+                        </div>
+                      </button>
+                      
+                      <button 
+                        onClick={handleExportPPTX}
+                        className="w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-orange-50 rounded-lg transition-colors group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:bg-orange-100 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2" />
+                          </svg>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-800">Download as PPTX</span>
+                          <span className="text-[10px] text-slate-400">Editable PowerPoint file</span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+               </div>
              </>
            )}
         </div>
@@ -496,7 +659,7 @@ const App: React.FC = () => {
         </aside>
 
         <div className="flex-1 overflow-y-auto p-12 bg-slate-100 flex flex-col items-center custom-scrollbar">
-          {(isGenerating || isImageGenerating) && statusMessage && (
+          {(isGenerating || isImageGenerating || isExporting) && statusMessage && (
             <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
                <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                <p className="text-xl font-medium text-slate-800 animate-pulse">{statusMessage}</p>
@@ -706,6 +869,23 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Hidden container for full presentation export rendering */}
+      <div 
+        ref={exportContainerRef}
+        className="fixed -left-[10000px] top-0 pointer-events-none"
+        style={{ width: '1280px' }}
+      >
+        {presentation?.slides.map(slide => (
+          <div key={`export-${slide.id}`} style={{ width: '1280px', height: '720px', overflow: 'hidden' }}>
+            <SlideRenderer 
+              slide={slide} 
+              onUpdate={() => {}} 
+              isActive={true} 
+            />
+          </div>
+        ))}
+      </div>
 
       {/* Regen Slide Modal */}
       {showRegenSlideModal && (
