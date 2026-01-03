@@ -23,7 +23,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ## 3. Architecture & Code Flow
 1. **Generation Flow:** User enters a prompt in `App.tsx` (top 20%) -> Calls `generatePresentation` in `geminiService.ts` -> Model returns JSON -> `App` initiates parallel image generation for all slides using `generateImage` -> State updates with complete text and visual content.
-2. **Demo Flow:** `handleLoadDemo` in `App.tsx` triggers parallel AI image generation for predefined demo prompts to ensure matching visuals.
+2. **Demo Flow:** `handleLoadDemo` in `App.tsx` instantly loads the predefined demo presentation using a static prerendered image (`demo/car.png`) for slides requiring visuals.
 3. **Export Flow:**
     - **PDF:** `App.tsx` renders all slides in a hidden off-screen container. `html2canvas` iterates through these elements to create high-resolution snapshots which are then embedded into a `jsPDF` instance.
     - **PPTX:** `pptxgenjs` programmatically constructs a PowerPoint file by mapping slide layouts to native shapes and text objects.

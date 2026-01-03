@@ -173,36 +173,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLoadDemo = async () => {
-    setIsImageGenerating(true);
-    setStatusMessage('Generating high-quality visuals for demo...');
-    try {
-      const slidesWithImages = await Promise.all(DEMO_PRESENTATION.slides.map(async (s) => {
-        let imageUrl = `https://picsum.photos/seed/${s.id}/800/600`;
-        if (s.imagePrompt) {
-          try {
-            imageUrl = await generateImage(s.imagePrompt);
-          } catch (e) {
-            console.error("Failed to generate demo image", e);
-            imageUrl = `https://picsum.photos/seed/${encodeURIComponent(s.imagePrompt)}/800/600`;
-          }
-        }
-        return { ...s, imageUrl };
-      }));
+  const handleLoadDemo = () => {
+    // For demo slides, use the prerendered image demo/car.png for any slide with an image requirement
+    const slidesWithImages = DEMO_PRESENTATION.slides.map((s) => ({
+      ...s,
+      imageUrl: s.imagePrompt ? 'demo/car.png' : undefined
+    }));
 
-      setPresentation({
-        ...DEMO_PRESENTATION,
-        slides: slidesWithImages
-      });
-      setCurrentSlideIndex(0);
-      setLastSaved(null);
-    } catch (error) {
-      console.error(error);
-      alert('Failed to load demo visuals.');
-    } finally {
-      setIsImageGenerating(false);
-      setStatusMessage('');
-    }
+    setPresentation({
+      ...DEMO_PRESENTATION,
+      slides: slidesWithImages
+    });
+    setCurrentSlideIndex(0);
+    setLastSaved(null);
   };
 
   const handleExportPDF = async () => {
