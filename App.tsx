@@ -9,7 +9,69 @@ import html2canvas from 'html2canvas';
 import pptxgen from 'pptxgenjs';
 import { DEMO_PRESENTATION } from './demo';
 
-const STORAGE_KEY = 'presentify_saved_presentation';
+// Storage keys
+const STORAGE_CURRENT = 'presentify_current'; // For presenter sync (no images)
+const STORAGE_LIBRARY = 'presentify_library'; // List of saved presentation metadata
+const STORAGE_PRES_PREFIX = 'presentify_pres_'; // Prefix for saved presentations (no images)
+const STORAGE_IMG_PREFIX = 'presentify_img_'; // Prefix for individual images
+
+// Storage helpers
+interface SavedPresentationMeta {
+  id: string;
+  title: string;
+  savedAt: string;
+  slideCount: number;
+}
+
+const stripImagesFromPresentation = (pres: Presentation): { presentation: Presentation; images: Record<string, string> } => {
+  const images: Record<string, string> = {};
+  const slides = pres.slides.map(slide => {
+    if (slide.imageUrl) {
+      images[slide.id] = slide.imageUrl;
+    }
+    return { ...slide, imageUrl: '' };
+  });
+  return { presentation: { ...pres, slides }, images };
+};
+
+const saveImagesToStorage = (presId: string, images: Record<string, string>) => {
+  Object.entries(images).forEach(([slideId, imageUrl]) => {
+    if (imageUrl) {
+      try {
+        localStorage.setItem(`${STORAGE_IMG_PREFIX}${presId}_${slideId}`, imageUrl);
+      } catch (e) {
+        console.warn(`Failed to save image for slide ${slideId}`, e);
+      }
+    }
+  });
+};
+
+const loadImagesFromStorage = (presId: string, slides: Slide[]): Slide[] => {
+  return slides.map(slide => {
+    const storedImage = localStorage.getItem(`${STORAGE_IMG_PREFIX}${presId}_${slide.id}`);
+    return storedImage ? { ...slide, imageUrl: storedImage } : slide;
+  });
+};
+
+const deleteImagesFromStorage = (presId: string, slideIds: string[]) => {
+  slideIds.forEach(slideId => {
+    localStorage.removeItem(`${STORAGE_IMG_PREFIX}${presId}_${slideId}`);
+  });
+};
+
+const getLibrary = (): SavedPresentationMeta[] => {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_LIBRARY) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const saveToLibrary = (meta: SavedPresentationMeta) => {
+  const library = getLibrary().filter(p => p.id !== meta.id);
+  library.unshift(meta);
+  localStorage.setItem(STORAGE_LIBRARY, JSON.stringify(library));
+};
 
 const EditorView: React.FC = () => {
   const [prompt, setPrompt] = useState('');
@@ -28,6 +90,10 @@ const EditorView: React.FC = () => {
   const [tempImagePrompt, setTempImagePrompt] = useState('');
   const [tempRegenPrompt, setTempRegenPrompt] = useState('');
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showOpenModal, setShowOpenModal] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [savedLibrary, setSavedLibrary] = useState<SavedPresentationMeta[]>([]);
   
   const exportContainerRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -51,14 +117,16 @@ const EditorView: React.FC = () => {
     return () => window.removeEventListener('mousedown', handleOutsideClick);
   }, [showExportMenu]);
 
-  // Load from localStorage on mount
+  // Load from localStorage on mount (current session only, for presenter sync)
   useEffect(() => {
-    const savedData = localStorage.getItem(STORAGE_KEY);
+    const savedData = localStorage.getItem(STORAGE_CURRENT);
     if (savedData) {
       try {
         const { presentation: savedPres, index, savedAt } = JSON.parse(savedData);
         if (savedPres && Array.isArray(savedPres.slides)) {
-          setPresentation(savedPres);
+          // Reload images from storage
+          const slidesWithImages = loadImagesFromStorage(savedPres.id, savedPres.slides);
+          setPresentation({ ...savedPres, slides: slidesWithImages });
           const validIndex = Math.min(index || 0, savedPres.slides.length - 1);
           setCurrentSlideIndex(Math.max(0, validIndex));
           setLastSaved(savedAt);
@@ -72,7 +140,7 @@ const EditorView: React.FC = () => {
   // Listen for storage changes from Presenter mode
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
+      if (e.key === STORAGE_CURRENT && e.newValue) {
         try {
           const { index } = JSON.parse(e.newValue);
           if (index !== undefined) {
@@ -92,29 +160,126 @@ const EditorView: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const handleSave = useCallback(() => {
+  // Sync current session to localStorage (for presenter mode, without images)
+  const syncToCurrentStorage = useCallback(() => {
     if (!presentation) return;
     try {
+      const { presentation: presWithoutImages } = stripImagesFromPresentation(presentation);
       const savedAt = new Date().toLocaleTimeString();
       const dataToSave = {
-        presentation,
+        presentation: presWithoutImages,
         index: currentSlideIndex,
         savedAt
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+      localStorage.setItem(STORAGE_CURRENT, JSON.stringify(dataToSave));
+      // Also save images for current session
+      const images: Record<string, string> = {};
+      presentation.slides.forEach(slide => {
+        if (slide.imageUrl) images[slide.id] = slide.imageUrl;
+      });
+      saveImagesToStorage(presentation.id, images);
       setLastSaved(savedAt);
     } catch (e) {
-      console.warn("Auto-save failed (likely quota exceeded)", e);
+      console.warn("Session sync failed", e);
     }
   }, [presentation, currentSlideIndex]);
 
-  // Auto-save with basic debouncing/throttle logic
+  // Auto-sync current session with debouncing
   useEffect(() => {
     if (presentation) {
-      const timeout = setTimeout(handleSave, 1000);
+      const timeout = setTimeout(syncToCurrentStorage, 1000);
       return () => clearTimeout(timeout);
     }
-  }, [presentation, currentSlideIndex, handleSave]);
+  }, [presentation, currentSlideIndex, syncToCurrentStorage]);
+
+  // Save presentation to library
+  const handleSaveToLibrary = useCallback(() => {
+    if (!presentation || !saveName.trim()) return;
+    try {
+      const presId = presentation.id;
+      const { presentation: presWithoutImages, images } = stripImagesFromPresentation(presentation);
+      const presWithTitle = { ...presWithoutImages, title: saveName.trim() };
+      
+      // Save presentation data
+      localStorage.setItem(`${STORAGE_PRES_PREFIX}${presId}`, JSON.stringify(presWithTitle));
+      
+      // Save images separately
+      saveImagesToStorage(presId, images);
+      
+      // Update library metadata
+      const meta: SavedPresentationMeta = {
+        id: presId,
+        title: saveName.trim(),
+        savedAt: new Date().toISOString(),
+        slideCount: presentation.slides.length
+      };
+      saveToLibrary(meta);
+      
+      // Update current presentation title
+      setPresentation({ ...presentation, title: saveName.trim() });
+      setShowSaveModal(false);
+      setSaveName('');
+      setLastSaved(new Date().toLocaleTimeString());
+    } catch (e) {
+      console.error("Failed to save presentation", e);
+      alert('Failed to save presentation. Storage may be full.');
+    }
+  }, [presentation, saveName]);
+
+  // Load presentation from library
+  const handleLoadFromLibrary = useCallback((meta: SavedPresentationMeta) => {
+    try {
+      const savedData = localStorage.getItem(`${STORAGE_PRES_PREFIX}${meta.id}`);
+      if (!savedData) {
+        alert('Presentation not found.');
+        return;
+      }
+      const loadedPres = JSON.parse(savedData) as Presentation;
+      const slidesWithImages = loadImagesFromStorage(meta.id, loadedPres.slides);
+      setPresentation({ ...loadedPres, slides: slidesWithImages });
+      setCurrentSlideIndex(0);
+      setShowOpenModal(false);
+      setLastSaved(new Date(meta.savedAt).toLocaleTimeString());
+    } catch (e) {
+      console.error("Failed to load presentation", e);
+      alert('Failed to load presentation.');
+    }
+  }, []);
+
+  // Delete presentation from library
+  const handleDeleteFromLibrary = useCallback((meta: SavedPresentationMeta) => {
+    try {
+      // Remove from library list
+      const library = getLibrary().filter(p => p.id !== meta.id);
+      localStorage.setItem(STORAGE_LIBRARY, JSON.stringify(library));
+      setSavedLibrary(library);
+      
+      // Remove presentation data
+      localStorage.removeItem(`${STORAGE_PRES_PREFIX}${meta.id}`);
+      
+      // Remove images (we need to get slide IDs first)
+      const savedData = localStorage.getItem(`${STORAGE_PRES_PREFIX}${meta.id}`);
+      if (savedData) {
+        const pres = JSON.parse(savedData) as Presentation;
+        deleteImagesFromStorage(meta.id, pres.slides.map(s => s.id));
+      }
+    } catch (e) {
+      console.error("Failed to delete presentation", e);
+    }
+  }, []);
+
+  // Open save modal
+  const openSaveModal = useCallback(() => {
+    if (!presentation) return;
+    setSaveName(presentation.title.replace(/<[^>]*>/g, ''));
+    setShowSaveModal(true);
+  }, [presentation]);
+
+  // Open load modal
+  const openLoadModal = useCallback(() => {
+    setSavedLibrary(getLibrary());
+    setShowOpenModal(true);
+  }, []);
 
   const handleGenerate = async (useHeaderPrompt = true) => {
     const targetPrompt = useHeaderPrompt ? prompt : (presentation?.title || prompt);
@@ -454,7 +619,7 @@ const EditorView: React.FC = () => {
   };
 
   const openPresenterMode = () => {
-    handleSave();
+    syncToCurrentStorage();
     window.open('#/present', 'PresenterWindow', 'width=1200,height=800');
   };
 
@@ -516,6 +681,16 @@ const EditorView: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-3">
+           <button 
+            onClick={openLoadModal}
+            className="flex items-center space-x-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors shadow-sm"
+           >
+             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+             </svg>
+             <span>Open</span>
+           </button>
+
            {presentation && (
              <>
                <button 
@@ -529,7 +704,7 @@ const EditorView: React.FC = () => {
                </button>
 
                <button 
-                onClick={handleSave}
+                onClick={openSaveModal}
                 className="flex items-center space-x-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors shadow-sm"
                >
                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -876,6 +1051,73 @@ const EditorView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {showSaveModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6">
+            <h3 className="text-xl font-bold text-slate-900 mb-4">Save Presentation</h3>
+            <input
+              type="text"
+              className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-xl p-3 text-sm outline-none transition-all"
+              placeholder="Enter presentation name..."
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveToLibrary(); }}
+              autoFocus
+            />
+            <div className="flex justify-end mt-6 space-x-3">
+              <button onClick={() => setShowSaveModal(false)} className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg">Cancel</button>
+              <button onClick={handleSaveToLibrary} disabled={!saveName.trim()} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-all">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOpenModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 max-h-[80vh] flex flex-col">
+            <h3 className="text-xl font-bold text-slate-900 mb-4">Open Presentation</h3>
+            {savedLibrary.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                </svg>
+                <p className="font-medium">No saved presentations</p>
+                <p className="text-sm mt-1">Create and save a presentation to see it here.</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
+                {savedLibrary.map((meta) => (
+                  <div
+                    key={meta.id}
+                    className="group flex items-center justify-between p-4 bg-slate-50 hover:bg-indigo-50 rounded-xl cursor-pointer transition-all"
+                    onClick={() => handleLoadFromLibrary(meta)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-800 truncate">{meta.title}</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {meta.slideCount} slides · {new Date(meta.savedAt).toLocaleDateString()} {new Date(meta.savedAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteFromLibrary(meta); }}
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                      title="Delete"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end mt-6 pt-4 border-t">
+              <button onClick={() => setShowOpenModal(false)} className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -891,12 +1133,14 @@ const PresenterView: React.FC = () => {
   }, []);
 
   const loadFromStorage = useCallback(() => {
-    const savedData = localStorage.getItem(STORAGE_KEY);
+    const savedData = localStorage.getItem(STORAGE_CURRENT);
     if (savedData) {
       try {
         const { presentation: savedPres, index } = JSON.parse(savedData);
         if (savedPres && Array.isArray(savedPres.slides)) {
-          setPresentation(savedPres);
+          // Reload images from storage
+          const slidesWithImages = loadImagesFromStorage(savedPres.id, savedPres.slides);
+          setPresentation({ ...savedPres, slides: slidesWithImages });
           const validIndex = Math.min(index || 0, savedPres.slides.length - 1);
           setCurrentSlideIndex(Math.max(0, validIndex));
         }
@@ -909,7 +1153,7 @@ const PresenterView: React.FC = () => {
   useEffect(() => {
     loadFromStorage();
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) loadFromStorage();
+      if (e.key === STORAGE_CURRENT) loadFromStorage();
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
@@ -920,8 +1164,8 @@ const PresenterView: React.FC = () => {
     const index = Math.max(0, Math.min(newIndex, presentation.slides.length - 1));
     setCurrentSlideIndex(index);
     try {
-      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, index }));
+      const data = JSON.parse(localStorage.getItem(STORAGE_CURRENT) || '{}');
+      localStorage.setItem(STORAGE_CURRENT, JSON.stringify({ ...data, index }));
     } catch (e) {
       console.warn("Storage update failed", e);
     }

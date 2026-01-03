@@ -28,6 +28,20 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Mechanism:** Leverages `localStorage` combined with the browser's `storage` event.
 - **Flow:** When the user navigates or edits in the `EditorView`, the state is saved to `localStorage`. The `PresenterView` listens for these changes and updates its UI in real-time. Navigation in the `PresenterView` also updates `localStorage`.
 
+### localStorage Schema
+The app uses a multi-key storage strategy to avoid quota limitations from large base64 images:
+
+| Key Pattern | Purpose |
+|-------------|---------|
+| `presentify_current` | Active session state (no images) for presenter sync |
+| `presentify_library` | Array of saved presentation metadata (`id`, `title`, `savedAt`, `slideCount`) |
+| `presentify_pres_{id}` | Full presentation data without images |
+| `presentify_img_{presId}_{slideId}` | Individual slide images stored separately |
+
+- **Save:** Opens a modal to name the presentation, then stores presentation data and images in separate keys.
+- **Open:** Displays a list of saved presentations from the library for selection and loading.
+- **Auto-sync:** The current session syncs to `presentify_current` (debounced) for presenter mode, with images stored separately.
+
 ### Export Flow
 - **UI:** A split-button menu in the header with format options.
 - **PDF/PPTX:** Captured via off-screen rendering or programmatic mapping of layouts to PowerPoint objects.
