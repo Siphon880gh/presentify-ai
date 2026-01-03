@@ -1,15 +1,76 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Presentation, Slide, SlideLayout } from './types';
-import { generatePresentation, regenerateSlide } from './services/geminiService';
+import { generatePresentation, regenerateSlide, generateImage } from './services/geminiService';
 import SlideRenderer from './components/SlideRenderer';
+
+const DEMO_PRESENTATION: Presentation = {
+  id: 'demo-123',
+  title: 'The Future of Urban Mobility',
+  slides: [
+    {
+      id: 's1',
+      title: 'The Future of Urban Mobility',
+      subtitle: 'Sustainable, Smart, and Seamless Transportation',
+      content: [],
+      layout: SlideLayout.TITLE,
+      imagePrompt: 'Futuristic city with flying taxis and electric pods, sunset, hyper-realistic'
+    },
+    {
+      id: 's2',
+      title: 'Current Challenges',
+      content: [
+        'Urban congestion costs cities billions annually',
+        'Rising CO2 emissions from traditional combustion engines',
+        'Lack of first-mile and last-mile connectivity',
+        'Infrastructure aging and inefficiency'
+      ],
+      layout: SlideLayout.BULLETS,
+      imagePrompt: 'Busy city traffic jam, moody lighting'
+    },
+    {
+      id: 's3',
+      title: 'Electrification & Zero Emissions',
+      content: [
+        'Electric vehicles (EVs) are now reaching price parity with gas cars.',
+        'Battery technology is doubling in efficiency every 5 years.',
+        'Cities like Oslo and Paris are banning fossil fuel cars by 2030.'
+      ],
+      layout: SlideLayout.IMAGE_LEFT,
+      imagePrompt: 'Sleek electric car charging at a high-tech station'
+    },
+    {
+      id: 's4',
+      title: 'A Visionary Perspective',
+      content: ['"The city of the future is a city built for people, not for cars. Mobility is the bridge between isolation and community."'],
+      layout: SlideLayout.QUOTE,
+    },
+    {
+      id: 's5',
+      title: 'Key Strategic Pillars',
+      content: [
+        'Autonomous Public Transit',
+        'Micromobility (E-bikes & Scooters)',
+        'Urban Air Mobility (eVTOL)',
+        'Smart Traffic Management'
+      ],
+      layout: SlideLayout.TWO_COLUMN,
+      imagePrompt: 'A futuristic floating transit pod over a park'
+    }
+  ]
+};
 
 const App: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isImageGenerating, setIsImageGenerating] = useState(false);
   const [presentation, setPresentation] = useState<Presentation | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
+  const [isOutlineCollapsed, setIsOutlineCollapsed] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [showImagePromptModal, setShowImagePromptModal] = useState(false);
+  const [tempImagePrompt, setTempImagePrompt] = useState('');
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -39,6 +100,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLoadDemo = () => {
+    setPresentation({
+      ...DEMO_PRESENTATION,
+      slides: DEMO_PRESENTATION.slides.map(s => ({
+        ...s,
+        imageUrl: s.imagePrompt ? `https://picsum.photos/seed/${encodeURIComponent(s.imagePrompt)}/800/600` : `https://picsum.photos/seed/${s.id}/800/600`
+      }))
+    });
+    setCurrentSlideIndex(0);
+  };
+
   const updateSlide = useCallback((updatedSlide: Slide) => {
     setPresentation(prev => {
       if (!prev) return null;
@@ -59,6 +131,24 @@ const App: React.FC = () => {
       console.error(error);
     } finally {
       setIsGenerating(false);
+      setStatusMessage('');
+    }
+  };
+
+  const handleRegenerateImage = async () => {
+    if (!presentation) return;
+    setIsImageGenerating(true);
+    setStatusMessage('Painting your vision...');
+    try {
+      const currentSlide = presentation.slides[currentSlideIndex];
+      const imageUrl = await generateImage(tempImagePrompt || currentSlide.imagePrompt || currentSlide.title);
+      updateSlide({ ...currentSlide, imageUrl, imagePrompt: tempImagePrompt });
+      setShowImagePromptModal(false);
+    } catch (error) {
+      console.error(error);
+      alert('Failed to generate image. Please try a different prompt.');
+    } finally {
+      setIsImageGenerating(false);
       setStatusMessage('');
     }
   };
@@ -90,10 +180,48 @@ const App: React.FC = () => {
     setCurrentSlideIndex(Math.max(0, currentSlideIndex - 1));
   };
 
+  // Drag and Drop Handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    setPresentation(prev => {
+      if (!prev) return null;
+      const newSlides = [...prev.slides];
+      const draggedSlide = newSlides[draggedIndex];
+      newSlides.splice(draggedIndex, 1);
+      newSlides.splice(index, 0, draggedSlide);
+      return { ...prev, slides: newSlides };
+    });
+    setDraggedIndex(index);
+    if (currentSlideIndex === draggedIndex) {
+      setCurrentSlideIndex(index);
+    } else if (currentSlideIndex > draggedIndex && currentSlideIndex <= index) {
+      setCurrentSlideIndex(currentSlideIndex - 1);
+    } else if (currentSlideIndex < draggedIndex && currentSlideIndex >= index) {
+      setCurrentSlideIndex(currentSlideIndex + 1);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
+  const openImageModal = () => {
+    if (!presentation) return;
+    const currentSlide = presentation.slides[currentSlideIndex];
+    setTempImagePrompt(currentSlide.imagePrompt || currentSlide.title);
+    setShowImagePromptModal(true);
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 overflow-hidden h-screen">
       {/* Header */}
-      <header className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+      <header className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-50 shrink-0">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -105,12 +233,12 @@ const App: React.FC = () => {
           </h1>
         </div>
 
-        <div className="flex-1 max-w-2xl px-8">
-          <div className="relative group">
+        <div className="flex-1 max-w-3xl px-8 flex items-center space-x-2">
+          <div className="relative flex-1 group">
             <input
               type="text"
               placeholder="What's your presentation about?"
-              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-full py-2 px-6 pr-12 transition-all outline-none"
+              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-full py-2 px-6 pr-24 transition-all outline-none"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
@@ -123,6 +251,15 @@ const App: React.FC = () => {
               {isGenerating ? '...' : 'Create'}
             </button>
           </div>
+          <button 
+            onClick={handleLoadDemo}
+            className="flex items-center space-x-2 px-4 py-2 border border-indigo-200 text-indigo-600 bg-indigo-50/50 hover:bg-indigo-100 rounded-full text-sm font-semibold transition-all shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+            <span>Demo</span>
+          </button>
         </div>
 
         <div className="flex items-center space-x-4">
@@ -140,48 +277,91 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
         {/* Sidebar Navigation */}
-        <aside className="w-64 bg-white border-r flex flex-col">
-          <div className="p-4 flex-1 overflow-y-auto">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Slides</h3>
-            <div className="space-y-2">
-              {presentation?.slides.map((slide, index) => (
-                <button
-                  key={slide.id}
-                  onClick={() => setCurrentSlideIndex(index)}
-                  className={`w-full text-left p-3 rounded-lg text-sm transition-all flex items-start space-x-3 ${
-                    currentSlideIndex === index 
-                      ? 'bg-indigo-50 text-indigo-700 border-l-4 border-indigo-600 font-medium' 
-                      : 'hover:bg-slate-50 text-slate-600'
-                  }`}
-                >
-                  <span className="opacity-50 mt-0.5">{index + 1}</span>
-                  <span className="truncate">{slide.title || 'Untitled Slide'}</span>
-                </button>
-              ))}
-              {!presentation && (
-                <div className="text-center py-10 px-4">
-                  <p className="text-slate-400 text-sm">Enter a prompt to generate slides</p>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="p-4 border-t">
+        <aside className={`${isOutlineCollapsed ? 'w-16' : 'w-72'} bg-white border-r flex flex-col transition-all duration-300 shrink-0`}>
+          <div className="p-4 flex items-center justify-between border-b shrink-0">
+            {!isOutlineCollapsed && (
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Outline</h3>
+            )}
             <button 
-              onClick={addSlide}
-              disabled={!presentation}
-              className="w-full flex items-center justify-center space-x-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 py-2 rounded-lg transition-colors"
+              onClick={() => setIsOutlineCollapsed(!isOutlineCollapsed)}
+              className="p-1 hover:bg-slate-100 rounded-md text-slate-400"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <svg className={`w-5 h-5 transform transition-transform ${isOutlineCollapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
               </svg>
-              <span>Add Slide</span>
             </button>
           </div>
+          
+          <div className="flex-1 overflow-y-auto outline-none py-2 px-2 custom-scrollbar">
+            {!isOutlineCollapsed ? (
+              <div className="space-y-1">
+                {presentation?.slides.map((slide, index) => (
+                  <div
+                    key={slide.id}
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                    className={`group relative flex items-center p-2 rounded-lg cursor-pointer transition-all ${
+                      currentSlideIndex === index 
+                        ? 'bg-indigo-50 text-indigo-700' 
+                        : 'hover:bg-slate-50 text-slate-600'
+                    } ${draggedIndex === index ? 'opacity-40 grayscale scale-95' : ''}`}
+                    onClick={() => setCurrentSlideIndex(index)}
+                  >
+                    <div className="mr-3 text-xs font-mono opacity-30 w-4">{index + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" dangerouslySetInnerHTML={{ __html: slide.title || 'Untitled Slide' }} />
+                    </div>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 text-slate-300">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                      </svg>
+                    </div>
+                  </div>
+                ))}
+                {!presentation && (
+                  <div className="text-center py-10 px-4">
+                    <p className="text-slate-400 text-xs">Enter a topic or try the demo</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center space-y-4 pt-2">
+                {presentation?.slides.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentSlideIndex(index)}
+                    className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${
+                      currentSlideIndex === index ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                    }`}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {!isOutlineCollapsed && (
+            <div className="p-4 border-t bg-slate-50 shrink-0">
+              <button 
+                onClick={addSlide}
+                disabled={!presentation}
+                className="w-full flex items-center justify-center space-x-2 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50 text-slate-600 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Add New Slide</span>
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* Canvas Area */}
-        <div className="flex-1 overflow-y-auto p-12 bg-slate-100 flex flex-col items-center">
-          {isGenerating && statusMessage && (
+        <div className="flex-1 overflow-y-auto p-12 bg-slate-100 flex flex-col items-center custom-scrollbar">
+          {(isGenerating || isImageGenerating) && statusMessage && (
             <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
                <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                <p className="text-xl font-medium text-slate-800 animate-pulse">{statusMessage}</p>
@@ -189,13 +369,16 @@ const App: React.FC = () => {
           )}
 
           {presentation ? (
-            <div className="w-full max-w-5xl space-y-8">
+            <div className="w-full max-w-5xl space-y-8 animate-in fade-in zoom-in duration-300">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-2xl font-bold text-slate-800">{presentation.title}</h2>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Slide {currentSlideIndex + 1}</span>
+                  <h2 className="text-2xl font-bold text-slate-800">{presentation.title}</h2>
+                </div>
                 <div className="flex items-center space-x-2">
                    <button 
                     onClick={deleteSlide}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                     title="Delete Slide"
                    >
                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -209,19 +392,21 @@ const App: React.FC = () => {
                 slide={presentation.slides[currentSlideIndex]} 
                 onUpdate={updateSlide}
                 isActive={true}
+                onRegenerateImage={openImageModal}
+                isImageLoading={isImageGenerating}
               />
 
               {/* Toolbar */}
-              <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-200 flex items-center justify-between">
+              <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-200 flex items-center justify-between sticky bottom-0 z-40">
                 <div className="flex items-center space-x-1">
-                  <span className="text-xs font-bold text-slate-400 mr-2 uppercase">Layouts:</span>
+                  <span className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-tighter">Layout</span>
                   {Object.values(SlideLayout).map(layout => (
                     <button
                       key={layout}
                       onClick={() => changeLayout(layout)}
                       className={`p-2 rounded-lg transition-all ${
                         presentation.slides[currentSlideIndex].layout === layout 
-                          ? 'bg-indigo-600 text-white' 
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
                           : 'hover:bg-slate-100 text-slate-600'
                       }`}
                       title={layout.replace('_', ' ')}
@@ -231,38 +416,38 @@ const App: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="h-6 w-px bg-slate-200" />
+                <div className="h-8 w-px bg-slate-100 mx-4" />
 
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-6">
                   <button 
                     onClick={handleRegenerateSlide}
-                    className="flex items-center space-x-2 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-lg transition-colors"
+                    className="flex items-center space-x-2 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-xl transition-all font-semibold"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    <span className="text-sm font-medium">Magic Fix</span>
+                    <span className="text-sm">Regenerate</span>
                   </button>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3 bg-slate-50 p-1.5 rounded-xl">
                     <button 
                       onClick={() => setCurrentSlideIndex(Math.max(0, currentSlideIndex - 1))}
                       disabled={currentSlideIndex === 0}
-                      className="p-2 hover:bg-slate-100 disabled:opacity-30 rounded-lg"
+                      className="p-2 hover:bg-white disabled:opacity-30 rounded-lg shadow-sm transition-all"
                     >
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                       </svg>
                     </button>
-                    <span className="text-sm font-medium text-slate-600">
+                    <span className="text-xs font-black text-slate-500 min-w-[3rem] text-center">
                       {currentSlideIndex + 1} / {presentation.slides.length}
                     </span>
                     <button 
                       onClick={() => setCurrentSlideIndex(Math.min(presentation.slides.length - 1, currentSlideIndex + 1))}
                       disabled={currentSlideIndex === presentation.slides.length - 1}
-                      className="p-2 hover:bg-slate-100 disabled:opacity-30 rounded-lg"
+                      className="p-2 hover:bg-white disabled:opacity-30 rounded-lg shadow-sm transition-all"
                     >
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
@@ -271,22 +456,22 @@ const App: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-center max-w-lg">
-              <div className="w-24 h-24 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mb-6 animate-bounce">
+            <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mt-20">
+              <div className="w-24 h-24 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mb-8 shadow-xl shadow-indigo-100/50 animate-bounce">
                 <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
               </div>
-              <h2 className="text-3xl font-bold text-slate-800 mb-4">Start your story</h2>
-              <p className="text-slate-500 mb-8 leading-relaxed">
-                Describe the presentation you want to create. Our AI will research, structure, and design your slides in seconds.
+              <h2 className="text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Create Professional Slides</h2>
+              <p className="text-slate-500 mb-10 leading-relaxed text-lg">
+                Enter a topic and watch as our AI creates a fully structured presentation with stunning layouts and rich content.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
-                 {['Future of AI', 'Sustainability 2025', 'Company Offsite', 'Space Exploration'].map(tag => (
+                 {['The Future of Web 3.0', 'Climate Change Strategies', 'Startup Pitch Deck', 'Quantum Computing 101'].map(tag => (
                    <button 
                     key={tag}
                     onClick={() => setPrompt(tag)}
-                    className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition-all shadow-sm"
+                    className="px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-md transition-all"
                    >
                      {tag}
                    </button>
@@ -297,14 +482,57 @@ const App: React.FC = () => {
         </div>
       </main>
 
+      {/* Image Prompt Modal */}
+      {showImagePromptModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-slate-900">Regenerate Image</h3>
+              <button 
+                onClick={() => setShowImagePromptModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l18 18" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-sm text-slate-500 mb-4">
+              Describe the image you want for this slide. Our AI will generate it in seconds.
+            </p>
+            <textarea
+              className="w-full bg-slate-50 border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-xl p-3 text-sm outline-none transition-all h-32 resize-none"
+              placeholder="e.g., A futuristic workspace with holographic screens, soft blue lighting..."
+              value={tempImagePrompt}
+              onChange={(e) => setTempImagePrompt(e.target.value)}
+            />
+            <div className="flex justify-end mt-6 space-x-3">
+              <button 
+                onClick={() => setShowImagePromptModal(false)}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleRegenerateImage}
+                disabled={isImageGenerating}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+              >
+                {isImageGenerating ? 'Generating...' : 'Generate Image'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
-      <footer className="bg-white border-t py-2 px-6 flex justify-between items-center text-xs text-slate-400">
+      <footer className="bg-white border-t py-3 px-6 flex justify-between items-center text-[10px] text-slate-400 shrink-0 font-medium">
         <p>© 2024 Presentify AI. All content AI-generated.</p>
-        <div className="flex items-center space-x-4">
-          <span>Press <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border">Enter</kbd> to edit any slide</span>
+        <div className="flex items-center space-x-6 uppercase tracking-widest">
+          <span>Editable Slides</span>
           <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full" />
-            <span>AI Ready</span>
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span>AI Online</span>
           </div>
         </div>
       </footer>

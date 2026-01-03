@@ -76,3 +76,24 @@ export const regenerateSlide = async (topic: string, slideContext: string): Prom
     imageUrl: slideData.imagePrompt ? `https://picsum.photos/seed/${encodeURIComponent(slideData.imagePrompt)}/800/600` : undefined
   };
 };
+
+export const generateImage = async (prompt: string): Promise<string> => {
+  const aiImage = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await aiImage.models.generateContent({
+    model: 'gemini-2.5-flash-image',
+    contents: {
+      parts: [
+        {
+          text: prompt,
+        },
+      ],
+    },
+  });
+
+  for (const part of response.candidates[0].content.parts) {
+    if (part.inlineData) {
+      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    }
+  }
+  throw new Error("No image data returned from API");
+};
