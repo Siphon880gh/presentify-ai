@@ -1,8 +1,10 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Presentation, Slide, SlideLayout } from './types';
 import { generatePresentation, regenerateSlide, generateImage } from './services/geminiService';
 import SlideRenderer from './components/SlideRenderer';
+
+const STORAGE_KEY = 'presentify_saved_presentation';
 
 const DEMO_PRESENTATION: Presentation = {
   id: 'demo-123',
@@ -70,7 +72,36 @@ const App: React.FC = () => {
   const [isOutlineCollapsed, setIsOutlineCollapsed] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [showImagePromptModal, setShowImagePromptModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [tempImagePrompt, setTempImagePrompt] = useState('');
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if (savedData) {
+      try {
+        const { presentation: savedPres, index, savedAt } = JSON.parse(savedData);
+        setPresentation(savedPres);
+        setCurrentSlideIndex(index || 0);
+        setLastSaved(savedAt);
+      } catch (e) {
+        console.error("Failed to load saved presentation", e);
+      }
+    }
+  }, []);
+
+  const handleSave = () => {
+    if (!presentation) return;
+    const savedAt = new Date().toLocaleTimeString();
+    const dataToSave = {
+      presentation,
+      index: currentSlideIndex,
+      savedAt
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+    setLastSaved(savedAt);
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -91,6 +122,7 @@ const App: React.FC = () => {
         slides: slidesWithIds
       });
       setCurrentSlideIndex(0);
+      setLastSaved(null); // New presentation, not yet saved in this session
     } catch (error) {
       console.error(error);
       alert('Failed to generate presentation. Please try again.');
@@ -109,6 +141,7 @@ const App: React.FC = () => {
       }))
     });
     setCurrentSlideIndex(0);
+    setLastSaved(null);
   };
 
   const updateSlide = useCallback((updatedSlide: Slide) => {
@@ -173,11 +206,26 @@ const App: React.FC = () => {
     setCurrentSlideIndex(currentSlideIndex + 1);
   };
 
-  const deleteSlide = () => {
+  const duplicateSlide = () => {
+    if (!presentation) return;
+    const currentSlide = presentation.slides[currentSlideIndex];
+    const newSlide: Slide = {
+      ...currentSlide,
+      id: Math.random().toString(36).substr(2, 9),
+      content: [...currentSlide.content]
+    };
+    const newSlides = [...presentation.slides];
+    newSlides.splice(currentSlideIndex + 1, 0, newSlide);
+    setPresentation({ ...presentation, slides: newSlides });
+    setCurrentSlideIndex(currentSlideIndex + 1);
+  };
+
+  const confirmDeleteSlide = () => {
     if (!presentation || presentation.slides.length <= 1) return;
     const newSlides = presentation.slides.filter((_, i) => i !== currentSlideIndex);
     setPresentation({ ...presentation, slides: newSlides });
     setCurrentSlideIndex(Math.max(0, currentSlideIndex - 1));
+    setShowDeleteModal(false);
   };
 
   // Drag and Drop Handlers
@@ -262,14 +310,30 @@ const App: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
            {presentation && (
-             <button className="flex items-center space-x-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg font-medium hover:bg-indigo-100 transition-colors">
-               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M16 8l-4-4m0 0l-4 4m4-4v12" />
-               </svg>
-               <span>Export</span>
-             </button>
+             <>
+               <div className="flex flex-col items-end mr-2">
+                 {lastSaved && (
+                   <span className="text-[10px] text-slate-400 font-medium">Last saved: {lastSaved}</span>
+                 )}
+               </div>
+               <button 
+                onClick={handleSave}
+                className="flex items-center space-x-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors shadow-sm"
+               >
+                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                 </svg>
+                 <span>Save</span>
+               </button>
+               <button className="flex items-center space-x-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg font-medium hover:bg-indigo-100 transition-colors">
+                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M16 8l-4-4m0 0l-4 4m4-4v12" />
+                 </svg>
+                 <span>Export</span>
+               </button>
+             </>
            )}
         </div>
       </header>
@@ -377,7 +441,16 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                    <button 
-                    onClick={deleteSlide}
+                    onClick={duplicateSlide}
+                    className="p-2.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all"
+                    title="Duplicate Slide"
+                   >
+                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                     </svg>
+                   </button>
+                   <button 
+                    onClick={() => setShowDeleteModal(true)}
                     className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                     title="Delete Slide"
                    >
@@ -424,7 +497,7 @@ const App: React.FC = () => {
                     className="flex items-center space-x-2 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-xl transition-all font-semibold"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357-2m15.357 2H15" />
                     </svg>
                     <span className="text-sm">Regenerate</span>
                   </button>
@@ -481,6 +554,41 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Delete Slide?</h3>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                  Are you sure you want to delete this slide? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col space-y-2 mt-8">
+              <button 
+                onClick={confirmDeleteSlide}
+                className="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-100"
+              >
+                Delete Slide
+              </button>
+              <button 
+                onClick={() => setShowDeleteModal(false)}
+                className="w-full py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Image Prompt Modal */}
       {showImagePromptModal && (
