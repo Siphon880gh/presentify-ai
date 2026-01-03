@@ -1,6 +1,13 @@
 
 import { Presentation, SlideLayout, SlideTransition } from '../types';
 
+/**
+ * NOTE: For local assets like car.png to work in a browser-native ESM 
+ * environment with Vite, they should be placed in the 'public/' directory.
+ * A file at 'public/demo/car.png' is served at the path '/demo/car.png'.
+ */
+const carUrl = '/demo/car.png';
+
 export const DEMO_PRESENTATION: Presentation = {
   id: 'demo-123',
   title: 'The Future of Urban Mobility',
@@ -25,7 +32,7 @@ export const DEMO_PRESENTATION: Presentation = {
         'Infrastructure aging and inefficiency'
       ],
       layout: SlideLayout.BULLETS,
-      imageUrl: 'https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&q=80&w=1280',
+      imageUrl: 'https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&get=80&w=1280',
       imagePrompt: 'Busy city traffic jam, moody lighting',
       transitionType: SlideTransition.FADE
     },
@@ -38,7 +45,7 @@ export const DEMO_PRESENTATION: Presentation = {
         'Cities like Oslo and Paris are banning fossil fuel cars by 2030.'
       ],
       layout: SlideLayout.IMAGE_LEFT,
-      imageUrl: 'https://images.unsplash.com/photo-1593941707882-a5bba14938c7?auto=format&fit=crop&q=80&w=1280',
+      imageUrl: carUrl, 
       imagePrompt: 'Sleek electric car charging at a high-tech station',
       transitionType: SlideTransition.SLIDE
     },
