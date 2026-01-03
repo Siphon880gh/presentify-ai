@@ -21,13 +21,53 @@ const RichTextEditor: React.FC<{
   const [activeStyles, setActiveStyles] = useState<{ [key: string]: any }>({});
   const editorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
   
   const internalValueRef = useRef(value);
+  
+  // History management
+  const historyRef = useRef<string[]>([value]);
+  const historyIndexRef = useRef<number>(0);
+
+  const saveToHistory = (content: string) => {
+    if (content === historyRef.current[historyIndexRef.current]) return;
+    const newHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
+    newHistory.push(content);
+    // Limit history size
+    if (newHistory.length > 50) newHistory.shift();
+    historyRef.current = newHistory;
+    historyIndexRef.current = newHistory.length - 1;
+  };
+
+  const handleUndo = () => {
+    if (historyIndexRef.current > 0) {
+      historyIndexRef.current--;
+      const val = historyRef.current[historyIndexRef.current];
+      if (editorRef.current) {
+        editorRef.current.innerHTML = val;
+        internalValueRef.current = val;
+      }
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndexRef.current < historyRef.current.length - 1) {
+      historyIndexRef.current++;
+      const val = historyRef.current[historyIndexRef.current];
+      if (editorRef.current) {
+        editorRef.current.innerHTML = val;
+        internalValueRef.current = val;
+      }
+    }
+  };
 
   useLayoutEffect(() => {
     if (editorRef.current) {
       editorRef.current.innerHTML = value || '';
       internalValueRef.current = value || '';
+      // Initialize history with starting value
+      historyRef.current = [value || ''];
+      historyIndexRef.current = 0;
     }
   }, []);
 
@@ -37,6 +77,9 @@ const RichTextEditor: React.FC<{
       if (!isFocused) {
         editorRef.current.innerHTML = value || '';
         internalValueRef.current = value || '';
+        // Reset history on external non-focused update
+        historyRef.current = [value || ''];
+        historyIndexRef.current = 0;
       }
     }
   }, [value, isFocused]);
@@ -49,6 +92,8 @@ const RichTextEditor: React.FC<{
       strikethrough: document.queryCommandState('strikethrough'),
       list: document.queryCommandState('insertUnorderedList'),
       fontSize: document.queryCommandValue('fontSize'),
+      canUndo: historyIndexRef.current > 0,
+      canRedo: historyIndexRef.current < historyRef.current.length - 1,
     });
   };
 
@@ -58,6 +103,7 @@ const RichTextEditor: React.FC<{
     editorRef.current?.focus();
     if (editorRef.current) {
       internalValueRef.current = editorRef.current.innerHTML;
+      saveToHistory(internalValueRef.current);
     }
   };
 
@@ -91,6 +137,29 @@ const RichTextEditor: React.FC<{
     
     internalValueRef.current = content;
     checkStyles();
+
+    // Debounced history save
+    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = window.setTimeout(() => {
+      saveToHistory(internalValueRef.current);
+      checkStyles();
+    }, 500);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+      checkStyles();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+      e.preventDefault();
+      handleRedo();
+      checkStyles();
+    }
   };
 
   const handleFocus = () => {
@@ -107,6 +176,7 @@ const RichTextEditor: React.FC<{
     if (editorRef.current) {
       const currentHtml = editorRef.current.innerHTML;
       internalValueRef.current = currentHtml;
+      saveToHistory(currentHtml);
       if (currentHtml !== value) {
         onUpdate(currentHtml);
       }
@@ -132,6 +202,27 @@ const RichTextEditor: React.FC<{
     >
       {isFocused && (
         <div className="absolute -top-12 left-0 flex items-center bg-white shadow-xl border border-slate-200 rounded-lg p-1 z-30 space-x-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <button 
+            onMouseDown={(e) => { e.preventDefault(); handleUndo(); checkStyles(); }}
+            disabled={!activeStyles.canUndo}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.canUndo ? 'hover:bg-slate-100 text-slate-700' : 'text-slate-300 opacity-50 cursor-not-allowed'}`}
+            title="Undo (Ctrl+Z)"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+          </button>
+          <button 
+            onMouseDown={(e) => { e.preventDefault(); handleRedo(); checkStyles(); }}
+            disabled={!activeStyles.canRedo}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.canRedo ? 'hover:bg-slate-100 text-slate-700' : 'text-slate-300 opacity-50 cursor-not-allowed'}`}
+            title="Redo (Ctrl+Y)"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
+            </svg>
+          </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('bold'); }}
             className={`w-8 h-8 flex items-center justify-center rounded font-bold transition-colors ${activeStyles.bold ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
@@ -182,6 +273,7 @@ const RichTextEditor: React.FC<{
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
+        onKeyDown={handleKeyDown}
         onKeyUp={checkStyles}
         onMouseUp={checkStyles}
         className={`${className} focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded transition-all min-h-[1em]`}
