@@ -114,10 +114,10 @@ const App: React.FC = () => {
   };
 
   const handleLoadDemo = () => {
-    // For demo slides, use the prerendered image demo/car.png for any slide with an image requirement
+    // For demo slides, use the absolute path /demo/car.png for slides with image prompts
     const slidesWithImages = DEMO_PRESENTATION.slides.map((s) => ({
       ...s,
-      imageUrl: s.imagePrompt ? 'demo/car.png' : undefined
+      imageUrl: s.imagePrompt ? '/demo/car.png' : undefined
     }));
 
     setPresentation({
