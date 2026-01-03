@@ -17,25 +17,33 @@ const RichTextEditor: React.FC<{
   placeholder?: string;
 }> = ({ value, onUpdate, className, placeholder }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const [activeStyles, setActiveStyles] = useState<{ [key: string]: boolean | string }>({});
   const editorRef = useRef<HTMLDivElement>(null);
 
-  const applyFormat = (command: string) => {
-    document.execCommand(command, false);
+  const checkStyles = () => {
+    setActiveStyles({
+      bold: document.queryCommandState('bold'),
+      italic: document.queryCommandState('italic'),
+      underline: document.queryCommandState('underline'),
+      strikethrough: document.queryCommandState('strikethrough'),
+      list: document.queryCommandState('insertUnorderedList'),
+      fontSize: document.queryCommandValue('fontSize'),
+    });
+  };
+
+  const applyFormat = (command: string, value: string | undefined = undefined) => {
+    document.execCommand(command, false, value);
+    checkStyles();
     editorRef.current?.focus();
   };
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     const text = e.currentTarget.innerText;
-    // Simple logic to detect ::img and replace with a placeholder block
-    // We use innerHTML for the transformation but be careful with cursor positioning
     if (text.toLowerCase().includes('::img')) {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) return;
       
-      const range = selection.getRangeAt(0);
       const content = e.currentTarget.innerHTML;
-      
-      // Replace ::img with a styled visual placeholder
       const placeholderHtml = `
         <div contenteditable="false" class="inline-block w-full h-32 my-4 bg-indigo-50 border-2 border-dashed border-indigo-200 rounded-xl flex flex-col items-center justify-center text-indigo-400 group/img">
           <svg class="w-8 h-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -49,7 +57,6 @@ const RichTextEditor: React.FC<{
       const newHtml = content.replace(/::img/gi, placeholderHtml);
       e.currentTarget.innerHTML = newHtml;
       
-      // Move cursor after the new element if possible
       const newRange = document.createRange();
       newRange.setStartAfter(e.currentTarget.lastChild!);
       newRange.collapse(true);
@@ -64,45 +71,79 @@ const RichTextEditor: React.FC<{
         <div className="absolute -top-12 left-0 flex items-center bg-white shadow-xl border border-slate-200 rounded-lg p-1 z-30 space-x-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('bold'); }}
-            className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded font-bold text-slate-700"
+            className={`w-8 h-8 flex items-center justify-center rounded font-bold transition-colors ${activeStyles.bold ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
             title="Bold (Ctrl+B)"
           >
             B
           </button>
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('italic'); }}
-            className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded italic text-slate-700 font-serif"
+            className={`w-8 h-8 flex items-center justify-center rounded italic font-serif transition-colors ${activeStyles.italic ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
             title="Italic (Ctrl+I)"
           >
             I
           </button>
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('underline'); }}
-            className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded underline text-slate-700"
+            className={`w-8 h-8 flex items-center justify-center rounded underline transition-colors ${activeStyles.underline ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
             title="Underline (Ctrl+U)"
           >
             U
           </button>
+          <button 
+            onMouseDown={(e) => { e.preventDefault(); applyFormat('strikethrough'); }}
+            className={`w-8 h-8 flex items-center justify-center rounded line-through transition-colors ${activeStyles.strikethrough ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
+            title="Strikethrough"
+          >
+            S
+          </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <div className="flex items-center bg-slate-50 rounded-md p-0.5 space-x-0.5">
+            <button 
+              onMouseDown={(e) => { e.preventDefault(); applyFormat('fontSize', '2'); }}
+              className={`px-1.5 h-6 text-[10px] flex items-center justify-center rounded transition-colors ${activeStyles.fontSize === '2' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'}`}
+              title="Small Text"
+            >
+              S
+            </button>
+            <button 
+              onMouseDown={(e) => { e.preventDefault(); applyFormat('fontSize', '4'); }}
+              className={`px-1.5 h-6 text-[12px] flex items-center justify-center rounded transition-colors ${activeStyles.fontSize === '4' || !activeStyles.fontSize ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'}`}
+              title="Medium Text"
+            >
+              M
+            </button>
+            <button 
+              onMouseDown={(e) => { e.preventDefault(); applyFormat('fontSize', '6'); }}
+              className={`px-1.5 h-6 text-[14px] flex items-center justify-center rounded transition-colors ${activeStyles.fontSize === '6' ? 'bg-white text-indigo-600 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'}`}
+              title="Large Text"
+            >
+              L
+            </button>
+          </div>
           <div className="w-px h-4 bg-slate-200 mx-1" />
           <button 
             onMouseDown={(e) => { e.preventDefault(); applyFormat('insertUnorderedList'); }}
-            className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded text-slate-700"
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.list ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-700'}`}
             title="Bullet List"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <div className="w-px h-4 bg-slate-200 mx-1" />
-          <div className="px-2 text-[10px] font-bold text-indigo-400">Type "::img" for image</div>
         </div>
       )}
       <div
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
-        onFocus={() => setIsFocused(true)}
+        onFocus={() => {
+          setIsFocused(true);
+          checkStyles();
+        }}
         onInput={handleInput}
+        onKeyUp={checkStyles}
+        onMouseUp={checkStyles}
         onBlur={(e) => {
           setIsFocused(false);
           onUpdate(e.currentTarget.innerHTML);
@@ -326,7 +367,6 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
                       <RemoveButton index={i} />
                     </div>
                  ))}
-                 {/* Only show add button once in column flow */}
                  {slide.content.length === 0 && <AddButton />}
               </div>
               <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
