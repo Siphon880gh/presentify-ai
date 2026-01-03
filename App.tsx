@@ -155,16 +155,36 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLoadDemo = () => {
-    setPresentation({
-      ...DEMO_PRESENTATION,
-      slides: DEMO_PRESENTATION.slides.map(s => ({
-        ...s,
-        imageUrl: s.imagePrompt ? `https://picsum.photos/seed/${encodeURIComponent(s.imagePrompt)}/800/600` : `https://picsum.photos/seed/${s.id}/800/600`
-      }))
-    });
-    setCurrentSlideIndex(0);
-    setLastSaved(null);
+  const handleLoadDemo = async () => {
+    setIsImageGenerating(true);
+    setStatusMessage('Generating high-quality visuals for demo...');
+    try {
+      const slidesWithImages = await Promise.all(DEMO_PRESENTATION.slides.map(async (s) => {
+        let imageUrl = `https://picsum.photos/seed/${s.id}/800/600`;
+        if (s.imagePrompt) {
+          try {
+            imageUrl = await generateImage(s.imagePrompt);
+          } catch (e) {
+            console.error("Failed to generate demo image", e);
+            imageUrl = `https://picsum.photos/seed/${encodeURIComponent(s.imagePrompt)}/800/600`;
+          }
+        }
+        return { ...s, imageUrl };
+      }));
+
+      setPresentation({
+        ...DEMO_PRESENTATION,
+        slides: slidesWithImages
+      });
+      setCurrentSlideIndex(0);
+      setLastSaved(null);
+    } catch (error) {
+      console.error(error);
+      alert('Failed to load demo visuals.');
+    } finally {
+      setIsImageGenerating(false);
+      setStatusMessage('');
+    }
   };
 
   const updateSlide = useCallback((updatedSlide: Slide) => {

@@ -14,7 +14,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Build Tool:** Vite (with custom define for API keys)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Manages presentation state, slide navigation, drag-and-drop reordering, and modal states. Initial generation now uses `Promise.all` to generate real AI images for every slide.
+- `App.tsx`: The main orchestrator. Manages presentation state, slide navigation, drag-and-drop reordering, and modal states. Initial generation and demo loading now use `Promise.all` to generate real AI images for every slide.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor` (a complex `contentEditable` wrapper).
 - `services/geminiService.ts`: Abstraction layer for Gemini API calls. Handles structured JSON generation for slides and Base64 image generation via `gemini-2.5-flash-image`.
 - `types.ts`: Defines `SlideLayout`, `SlideTransition`, and the `Presentation` schema.
@@ -22,8 +22,9 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ## 3. Architecture & Code Flow
 1. **Generation Flow:** User enters a prompt in `App.tsx` (top 20%) -> Calls `generatePresentation` in `geminiService.ts` -> Model returns JSON -> `App` initiates parallel image generation for all slides using `generateImage` -> State updates with complete text and visual content.
-2. **Editing Flow:** `SlideRenderer` renders the current slide based on `currentSlideIndex`. Title and content items use `RichTextEditor` for formatting.
-3. **Persistence:** `localStorage` is used in `App.tsx` (near the top) to save and reload presentations.
+2. **Demo Flow:** `handleLoadDemo` in `App.tsx` triggers parallel AI image generation for predefined demo prompts to ensure matching visuals.
+3. **Editing Flow:** `SlideRenderer` renders the current slide based on `currentSlideIndex`. Title and content items use `RichTextEditor` for formatting.
+4. **Persistence:** `localStorage` is used in `App.tsx` (near the top) to save and reload presentations.
 
 ---
 
