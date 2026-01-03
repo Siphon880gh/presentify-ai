@@ -484,7 +484,8 @@ const EditorView: React.FC = () => {
               ref={promptRef}
               rows={1}
               placeholder="Enter a new topic for a full slideshow..."
-              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2.5 px-6 pr-24 transition-all outline-none resize-none overflow-hidden min-h-[44px] max-h-32"
+              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2.5 px-6 pr-24 transition-all outline-none resize-none overflow-hidden"
+              style={{ maxHeight: '34px', minHeight: '34px' }}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => {
@@ -498,6 +499,7 @@ const EditorView: React.FC = () => {
               onClick={() => handleGenerate(true)}
               disabled={isGenerating}
               className="absolute right-2 bottom-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-full text-sm font-medium transition-colors"
+              style={{ top: '3px' }}
             >
               {isGenerating ? '...' : 'Create'}
             </button>
