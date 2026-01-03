@@ -23,6 +23,7 @@ export interface Slide {
   imagePrompt?: string;
   imageUrl?: string;
   transitionType?: SlideTransition;
+  notes?: string;
 }
 
 export interface Presentation {

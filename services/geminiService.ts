@@ -27,7 +27,7 @@ export const generateImage = async (prompt: string): Promise<string> => {
 export const generatePresentation = async (prompt: string): Promise<any> => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Create a professional 7-10 slide presentation about: ${prompt}. Each slide should have a distinct layout and an appropriate transition type (FADE, SLIDE, or ZOOM).`,
+    contents: `Create a professional 7-10 slide presentation about: ${prompt}. Each slide should have a distinct layout, an appropriate transition type (FADE, SLIDE, or ZOOM), and detailed speaker notes to help the presenter.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -53,9 +53,10 @@ export const generatePresentation = async (prompt: string): Promise<any> => {
                   type: Type.STRING,
                   enum: Object.values(SlideTransition)
                 },
-                imagePrompt: { type: Type.STRING }
+                imagePrompt: { type: Type.STRING },
+                notes: { type: Type.STRING, description: "Detailed speaker notes for this slide" }
               },
-              required: ["title", "content", "layout", "transitionType"]
+              required: ["title", "content", "layout", "transitionType", "notes"]
             }
           }
         },
@@ -73,7 +74,7 @@ export const refineSlide = async (topic: string, refinementPrompt: string): Prom
     contents: `You are a professional presentation designer. Refine this slide for a presentation about "${topic}". 
     User Refinement Request: "${refinementPrompt}"
     
-    Ensure the layout is appropriate for the new content. Return a JSON object with title, subtitle, content (array), layout, transitionType, and imagePrompt.`,
+    Ensure the layout is appropriate for the new content and include updated speaker notes. Return a JSON object with title, subtitle, content (array), layout, transitionType, imagePrompt, and notes.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -93,9 +94,10 @@ export const refineSlide = async (topic: string, refinementPrompt: string): Prom
             type: Type.STRING,
             enum: Object.values(SlideTransition)
           },
-          imagePrompt: { type: Type.STRING }
+          imagePrompt: { type: Type.STRING },
+          notes: { type: Type.STRING }
         },
-        required: ["title", "content", "layout", "transitionType"]
+        required: ["title", "content", "layout", "transitionType", "notes"]
       }
     }
   });
@@ -119,7 +121,7 @@ export const refineSlide = async (topic: string, refinementPrompt: string): Prom
 export const regenerateSlide = async (topic: string, slideContext: string): Promise<Partial<Slide>> => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Regenerate a single slide for a presentation about ${topic}. The slide focus is: ${slideContext}. Include an appropriate transition type. Return a JSON object with title, subtitle, content (array), layout, transitionType, and imagePrompt.`,
+    contents: `Regenerate a single slide for a presentation about ${topic}. The slide focus is: ${slideContext}. Include an appropriate transition type and speaker notes. Return a JSON object with title, subtitle, content (array), layout, transitionType, imagePrompt, and notes.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -139,9 +141,10 @@ export const regenerateSlide = async (topic: string, slideContext: string): Prom
             type: Type.STRING,
             enum: Object.values(SlideTransition)
           },
-          imagePrompt: { type: Type.STRING }
+          imagePrompt: { type: Type.STRING },
+          notes: { type: Type.STRING }
         },
-        required: ["title", "content", "layout", "transitionType"]
+        required: ["title", "content", "layout", "transitionType", "notes"]
       }
     }
   });
