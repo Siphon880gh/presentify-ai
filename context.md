@@ -15,7 +15,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Exporting Libraries:** `jspdf` (PDF generation), `html2canvas` (DOM capturing), `pptxgenjs` (PowerPoint generation)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Now includes `HashRouter` and two primary views: `EditorView` and `PresenterView`.
+- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header for complex topics.
 - `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, export logic, and speaker notes editing.
 - `PresenterView`: A specialized view for presenters that displays the current slide, next slide preview, speaker notes, and a session timer.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor`.
@@ -26,12 +26,11 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ### Presenter Mode Synchronization
 - **Mechanism:** Leverages `localStorage` combined with the browser's `storage` event.
-- **Flow:** When the user navigates or edits in the `EditorView`, the state is saved to `localStorage`. The `PresenterView` (usually in a separate window) listens for these changes and updates its UI in real-time. Navigation in the `PresenterView` also updates `localStorage`, keeping the `EditorView` synchronized.
+- **Flow:** When the user navigates or edits in the `EditorView`, the state is saved to `localStorage`. The `PresenterView` listens for these changes and updates its UI in real-time. Navigation in the `PresenterView` also updates `localStorage`.
 
 ### Export Flow
 - **UI:** A split-button menu in the header with format options.
 - **PDF/PPTX:** Captured via off-screen rendering or programmatic mapping of layouts to PowerPoint objects.
-- **PPTX Fix:** Added logic to handle both external URLs and data URLs for images. Data URLs are stripped of their metadata prefix before being passed to the `data` property of `pptxgenjs`.
 
 ---
 

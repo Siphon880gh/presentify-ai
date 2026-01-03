@@ -30,6 +30,15 @@ const EditorView: React.FC = () => {
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   
   const exportContainerRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize prompt textarea
+  useEffect(() => {
+    if (promptRef.current) {
+      promptRef.current.style.height = 'auto';
+      promptRef.current.style.height = `${promptRef.current.scrollHeight}px`;
+    }
+  }, [prompt]);
 
   // Close export menu on click outside
   useEffect(() => {
@@ -470,26 +479,32 @@ const EditorView: React.FC = () => {
         </div>
 
         <div className="flex-1 max-w-2xl px-8 flex items-center space-x-2">
-          <div className="relative flex-1 group">
-            <input
-              type="text"
+          <div className="relative flex-1 group flex items-end">
+            <textarea
+              ref={promptRef}
+              rows={1}
               placeholder="Enter a new topic for a full slideshow..."
-              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-full py-2 px-6 pr-24 transition-all outline-none"
+              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2.5 px-6 pr-24 transition-all outline-none resize-none overflow-hidden min-h-[44px] max-h-32"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleGenerate(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleGenerate(true);
+                }
+              }}
             />
             <button 
               onClick={() => handleGenerate(true)}
               disabled={isGenerating}
-              className="absolute right-2 top-1 bottom-1 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-full text-sm font-medium transition-colors"
+              className="absolute right-2 bottom-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-full text-sm font-medium transition-colors"
             >
               {isGenerating ? '...' : 'Create'}
             </button>
           </div>
           <button 
             onClick={handleLoadDemo}
-            className="flex items-center space-x-2 px-4 py-2 border border-indigo-200 text-indigo-600 bg-indigo-50/50 hover:bg-indigo-100 rounded-full text-sm font-semibold transition-all shadow-sm"
+            className="flex items-center space-x-2 px-4 py-2 border border-indigo-200 text-indigo-600 bg-indigo-50/50 hover:bg-indigo-100 rounded-full text-sm font-semibold transition-all shadow-sm shrink-0"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
