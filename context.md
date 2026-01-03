@@ -1,43 +1,63 @@
-# RichTextEditor Synchronization Strategy
+# Presentify AI - Project Context
+
+> [!NOTE]
+> **Approximate Location Cues:** Line references in this documentation (e.g., "near the middle", "top 25%") are intentional to ensure documentation remains resilient to minor code shifts.
+
+## 1. High-Level Overview
+Presentify AI is a professional, AI-powered presentation generation tool. It leverages Google’s Gemini API to transform text prompts into structured multi-slide presentations. Users can edit content in real-time, swap layouts, change transitions, and regenerate AI-driven imagery.
+
+### Tech Stack
+- **Framework:** React 19 (via ESM imports)
+- **Styling:** Tailwind CSS (via CDN in `index.html`)
+- **AI Integration:** `@google/genai` (Gemini 3 Flash for text, Gemini 2.5 Flash for images)
+- **Build Tool:** Vite (with custom define for API keys)
+
+## 2. File Tree & Roles
+- `App.tsx`: The main orchestrator. Manages presentation state, slide navigation, drag-and-drop reordering, and modal states.
+- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor` (a complex `contentEditable` wrapper).
+- `services/geminiService.ts`: Abstraction layer for Gemini API calls. Handles structured JSON generation for slides and Base64 image generation.
+- `types.ts`: Defines `SlideLayout`, `SlideTransition`, and the `Presentation` schema.
+- `metadata.json`: App metadata and browser permissions.
+
+## 3. Architecture & Code Flow
+1. **Generation Flow:** User enters a prompt in `App.tsx` (top 20%) -> Calls `generatePresentation` in `geminiService.ts` -> Model returns JSON -> `App` injects IDs and default images -> State updates.
+2. **Editing Flow:** `SlideRenderer` renders the current slide based on `currentSlideIndex`. Title and content items use `RichTextEditor` for formatting.
+3. **Persistence:** `localStorage` is used in `App.tsx` (near the top) to save and reload presentations.
+
+---
+
+# RichTextEditor Synchronization Strategy (CRITICAL)
 
 The `RichTextEditor` uses browser-native `contentEditable` for rich formatting. This requires a specific architectural approach to avoid standard React/DOM synchronization bugs.
 
 > [!IMPORTANT]
-> **CRITICAL IMPLEMENTATION GUARDRAIL:** The solutions provided below are strictly mandatory. Any deviation—even for "optimization" or "cleanup"—will immediately re-introduce the severe bugs described in the **Problem** sections (e.g., cursor jumping to start, lost focus, or component flickering).
+> **CRITICAL IMPLEMENTATION GUARDRAIL:** The solutions provided below are strictly mandatory. Any deviation—even for "optimization" or "cleanup"—will immediately re-introduce severe bugs like cursor jumping or focus loss.
 
 ## Strict Rules & Solutions
 
 ### 1. No `dangerouslySetInnerHTML`
-**Problem:** Using `dangerouslySetInnerHTML` on a `contentEditable` element causes React to re-apply the HTML string on every re-render of the parent. This resets the browser's selection state and moves the cursor/caret to the start of the element.
-**Solution:**
-- **NEVER** use `dangerouslySetInnerHTML` in the `RichTextEditor`'s JSX.
-- Return an empty `div` (no children) from the component.
-- Manage the element's children manually through the `editorRef`.
+**Problem:** Using `dangerouslySetInnerHTML` on a `contentEditable` element causes React to re-apply the HTML string on every re-render, resetting the cursor to the start.
+**Solution:** (Found in `RichTextEditor` near the start of `components/SlideRenderer.tsx`)
+- Return an empty `div` (no children) from the component JSX.
+- Manage the element's children manually through `editorRef`.
 
 ### 2. Preventing "Blank Text" on Mount
-**Problem:** Because React's JSX is empty, the editor appears blank until the first `useEffect` runs.
+**Problem:** Because JSX is empty, the editor appears blank until effects run.
 **Solution:**
-- Use `useLayoutEffect` with an empty dependency array to set `innerHTML` synchronously before the browser paints.
-- Assign a unique `key` to each editor in `SlideRenderer` (e.g., `${slide.id}-title`). This forces a full remount when the slide changes, triggering `useLayoutEffect` for the new content.
+- Use `useLayoutEffect` (around the middle of the editor component) to set `innerHTML` synchronously.
+- Assign a unique `key` to each editor in `SlideRenderer` (e.g., `${slide.id}-title`) to force a full remount when the slide changes.
 
 ### 3. Preventing Cursor Jumps during External Sync
-**Problem:** When the AI updates slide content, we need the UI to reflect it, but we must not overwrite the user's current typing. If overwritten, the cursor position is lost.
+**Problem:** If the AI updates content while a user is typing, overwriting the DOM loses the cursor position.
 **Solution:**
-- Maintain an `internalValueRef` that tracks the current `innerHTML`.
-- Use a `useEffect` that monitors the `value` prop.
-- **SYNC GUARD:** Only update the `editorRef.current.innerHTML` if:
-  1. The prop `value` differs from `internalValueRef.current`.
-  2. The editor is **NOT** focused (`!isFocused`).
-- This ensures that while the user is typing, the DOM is left alone. When the user blurs or a different slide is selected, synchronization resumes safely.
+- Maintain an `internalValueRef` tracking `innerHTML`.
+- **SYNC GUARD:** Only update `editorRef.current.innerHTML` in `useEffect` if the prop `value` differs from `internalValueRef` AND the editor is **NOT** focused.
 
-### 4. Toolbar Persistence During Interaction
-**Problem:** Clicking a dropdown (like font size) or a button in the formatting toolbar can trigger a `blur` event on the `contentEditable` div, closing the toolbar prematurely and breaking the user's workflow.
+### 4. Toolbar Persistence
+**Problem:** Clicking toolbar buttons triggers a `blur` event, closing the toolbar.
 **Solution:**
-- Wrap the editor and toolbar in a common container `div`.
-- Track focus at the container level.
-- Use the `relatedTarget` property in the `onBlur` event to check if the new focus target is still within the container. If it is, do not set `isFocused` to false.
-- This allows users to interact with toolbar controls without the popover disappearing.
+- Wrap editor and toolbar in a container.
+- Use `relatedTarget` in `onBlur` (middle of the component) to check if focus stayed within the container.
 
-### 5. Event Handling
-- Use `onInput` to update `internalValueRef` in real-time.
-- Use `onBlur` (at the container level) to trigger the parent's `onUpdate` state change. This keeps parent re-renders to a minimum and prevents "bounce-back" loops where typing triggers a state update that triggers a re-render.
+### 5. History & Undo/Redo
+- `RichTextEditor` maintains an internal `historyRef` and `historyIndexRef` to support custom Undo/Redo (Ctrl+Z / Ctrl+Y), bypassing inconsistent browser implementations.
