@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { Slide, SlideLayout } from '../types';
+import { Slide, SlideLayout, SlideTransition } from '../types';
 
 interface SlideRendererProps {
   slide: Slide;
@@ -8,6 +8,7 @@ interface SlideRendererProps {
   isActive: boolean;
   onRegenerateImage?: () => void;
   isImageLoading?: boolean;
+  transitionType?: SlideTransition;
 }
 
 const RichTextEditor: React.FC<{
@@ -21,23 +22,17 @@ const RichTextEditor: React.FC<{
   const editorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Ref to track what is currently in the DOM to prevent redundant/resetting updates
   const internalValueRef = useRef(value);
 
-  // 1. Initial Content Setup: useLayoutEffect runs before paint to prevent "blank" flicker
   useLayoutEffect(() => {
     if (editorRef.current) {
       editorRef.current.innerHTML = value || '';
       internalValueRef.current = value || '';
     }
-  }, []); // Only run on mount. Slide switches are handled by 'key' in parent.
+  }, []);
 
-  // 2. External Sync: Handle AI updates or other external prop changes
   useEffect(() => {
     if (!editorRef.current) return;
-
-    // Only update DOM manually if the prop differs from our internal tracking
-    // AND we aren't focused (typing). This prevents cursor jumps.
     if (value !== internalValueRef.current) {
       if (!isFocused) {
         editorRef.current.innerHTML = value || '';
@@ -70,7 +65,6 @@ const RichTextEditor: React.FC<{
     const target = e.currentTarget;
     let content = target.innerHTML;
     
-    // Check for inline image shortcut
     if (target.innerText.toLowerCase().includes('::img')) {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) return;
@@ -105,7 +99,6 @@ const RichTextEditor: React.FC<{
   };
 
   const handleBlur = (e: React.FocusEvent) => {
-    // If focus is moving to something inside our component (like the toolbar), don't close it
     if (containerRef.current && containerRef.current.contains(e.relatedTarget as Node)) {
       return;
     }
@@ -202,7 +195,7 @@ const RichTextEditor: React.FC<{
   );
 };
 
-const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive, onRegenerateImage, isImageLoading }) => {
+const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive, onRegenerateImage, isImageLoading, transitionType = SlideTransition.FADE }) => {
   const handleFieldChange = (field: keyof Slide, value: any) => {
     onUpdate({ ...slide, [field]: value });
   };
@@ -476,8 +469,16 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
     }
   };
 
+  const currentTransition = slide.transitionType || transitionType || SlideTransition.FADE;
+
+  const transitionClass = currentTransition === SlideTransition.SLIDE 
+    ? 'transition-slide-enter' 
+    : currentTransition === SlideTransition.ZOOM 
+      ? 'transition-zoom-enter' 
+      : 'transition-fade-enter';
+
   return (
-    <div className={`slide-aspect w-full bg-white shadow-2xl rounded-2xl p-12 transition-all duration-300 relative ${isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50 blur-sm pointer-events-none'}`}>
+    <div className={`slide-aspect w-full bg-white shadow-2xl rounded-2xl p-12 transition-all duration-300 relative ${isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50 blur-sm pointer-events-none'} ${isActive ? transitionClass : ''}`}>
       {renderContent()}
     </div>
   );

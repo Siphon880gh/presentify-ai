@@ -8,6 +8,12 @@ export enum SlideLayout {
   TWO_COLUMN = 'TWO_COLUMN'
 }
 
+export enum SlideTransition {
+  FADE = 'FADE',
+  SLIDE = 'SLIDE',
+  ZOOM = 'ZOOM'
+}
+
 export interface Slide {
   id: string;
   title: string;
@@ -16,10 +22,12 @@ export interface Slide {
   layout: SlideLayout;
   imagePrompt?: string;
   imageUrl?: string;
+  transitionType?: SlideTransition;
 }
 
 export interface Presentation {
   id: string;
   title: string;
   slides: Slide[];
+  transitionType?: SlideTransition;
 }
