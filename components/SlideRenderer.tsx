@@ -9,6 +9,7 @@ interface SlideRendererProps {
   onRegenerateImage?: () => void;
   isImageLoading?: boolean;
   transitionType?: SlideTransition;
+  disableTransitions?: boolean;
 }
 
 const RichTextEditor: React.FC<{
@@ -285,7 +286,7 @@ const RichTextEditor: React.FC<{
   );
 };
 
-const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive, onRegenerateImage, isImageLoading, transitionType = SlideTransition.FADE }) => {
+const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive, onRegenerateImage, isImageLoading, transitionType = SlideTransition.FADE, disableTransitions = false }) => {
   const handleFieldChange = (field: keyof Slide, value: any) => {
     onUpdate({ ...slide, [field]: value });
   };
@@ -570,15 +571,14 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
 
   const currentTransition = slide.transitionType || transitionType || SlideTransition.FADE;
 
-  const transitionClass = currentTransition === SlideTransition.SLIDE 
+  const transitionClass = disableTransitions ? '' : (currentTransition === SlideTransition.SLIDE 
     ? 'transition-slide-enter' 
     : currentTransition === SlideTransition.ZOOM 
       ? 'transition-zoom-enter' 
-      : 'transition-fade-enter';
+      : 'transition-fade-enter');
 
-  // We remove transition-all here to prevent conflicts with @keyframes animations
   return (
-    <div className={`slide-aspect w-full bg-white shadow-2xl rounded-2xl p-12 relative ${isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50 blur-sm pointer-events-none'} ${isActive ? transitionClass : ''}`}>
+    <div className={`slide-aspect w-full bg-white shadow-2xl rounded-2xl p-12 relative ${isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50 blur-sm pointer-events-none'} ${isActive && !disableTransitions ? transitionClass : ''}`}>
       {renderContent()}
     </div>
   );

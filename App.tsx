@@ -168,38 +168,50 @@ const EditorView: React.FC = () => {
   };
 
   const handleExportPDF = async () => {
-    if (!presentation || !exportContainerRef.current) return;
+    if (!presentation) return;
     setShowExportMenu(false);
     setIsExporting(true);
-    setStatusMessage('Preparing high-resolution PDF...');
+    setStatusMessage('Capturing high-resolution PDF...');
+
+    // Wait for the off-screen container to render the slides
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     try {
+      if (!exportContainerRef.current) {
+        throw new Error("Capture container missing");
+      }
+
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'px',
         format: [1280, 720]
       });
 
-      const slideElements = exportContainerRef.current.children;
+      const slideElements = Array.from(exportContainerRef.current.children);
+      
       for (let i = 0; i < slideElements.length; i++) {
-        setStatusMessage(`Capturing slide ${i + 1} of ${slideElements.length}...`);
+        setStatusMessage(`Processing slide ${i + 1} of ${slideElements.length}...`);
         const element = slideElements[i] as HTMLElement;
+        
         const canvas = await html2canvas(element, {
           scale: 2,
           useCORS: true,
           logging: false,
-          backgroundColor: '#ffffff'
+          backgroundColor: '#ffffff',
+          allowTaint: true,
+          width: 1280,
+          height: 720
         });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
         
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
         if (i > 0) pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, 0, 1280, 720);
       }
 
-      pdf.save(`${presentation.title.replace(/<[^>]*>/g, '').substring(0, 30) || 'Presentation'}.pdf`);
+      pdf.save(`${presentation.title.replace(/<[^>]*>/g, '').substring(0, 30)}.pdf`);
     } catch (error) {
       console.error('PDF Export failed:', error);
-      alert('Failed to export PDF.');
+      alert('Export failed. Please ensure all images are loaded.');
     } finally {
       setIsExporting(false);
       setStatusMessage('');
@@ -215,6 +227,17 @@ const EditorView: React.FC = () => {
     try {
       const pptx = new (pptxgen as any)();
       pptx.title = presentation.title;
+      pptx.layout = 'LAYOUT_16x9';
+
+      const addSlideImage = (pSlide: any, imageUrl: string, options: any) => {
+        if (!imageUrl) return;
+        // Use 'data' property for base64 strings and 'path' for URLs
+        if (imageUrl.startsWith('data:')) {
+          pSlide.addImage({ data: imageUrl, ...options });
+        } else {
+          pSlide.addImage({ path: imageUrl, ...options });
+        }
+      };
 
       presentation.slides.forEach((slide) => {
         const pSlide = pptx.addSlide();
@@ -224,6 +247,9 @@ const EditorView: React.FC = () => {
 
         switch (slide.layout) {
           case SlideLayout.TITLE:
+            if (slide.imageUrl) {
+              addSlideImage(pSlide, slide.imageUrl, { x: 0, y: 0, w: '100%', h: '100%', opacity: 20 });
+            }
             pSlide.addText(cleanTitle, { x: 1, y: 2, w: '80%', fontSize: 44, bold: true, align: 'center', color: '333333' });
             if (cleanSubtitle) pSlide.addText(cleanSubtitle, { x: 1, y: 3.2, w: '80%', fontSize: 24, align: 'center', color: '666666' });
             break;
@@ -235,9 +261,7 @@ const EditorView: React.FC = () => {
 
           case SlideLayout.IMAGE_LEFT:
             if (slide.imageUrl) {
-              const isData = slide.imageUrl.startsWith('data:');
-              const imgVal = isData ? slide.imageUrl.split(',')[1] : slide.imageUrl;
-              pSlide.addImage({ [isData ? 'data' : 'path']: imgVal, x: 0.5, y: 1, w: 4, h: 3.5 });
+              addSlideImage(pSlide, slide.imageUrl, { x: 0.5, y: 1, w: 4, h: 3.5 });
             }
             pSlide.addText(cleanTitle, { x: 5, y: 1, w: 4.5, fontSize: 28, bold: true, color: '333333' });
             pSlide.addText(cleanContent.map(text => ({ text, options: { bullet: true } })), { x: 5, y: 2, w: 4.5, fontSize: 16, color: '555555' });
@@ -247,9 +271,7 @@ const EditorView: React.FC = () => {
             pSlide.addText(cleanTitle, { x: 0.5, y: 1, w: 4.5, fontSize: 28, bold: true, color: '333333' });
             pSlide.addText(cleanContent.map(text => ({ text, options: { bullet: true } })), { x: 0.5, y: 2, w: 4.5, fontSize: 16, color: '555555' });
             if (slide.imageUrl) {
-              const isData = slide.imageUrl.startsWith('data:');
-              const imgVal = isData ? slide.imageUrl.split(',')[1] : slide.imageUrl;
-              pSlide.addImage({ [isData ? 'data' : 'path']: imgVal, x: 5.5, y: 1, w: 4, h: 3.5 });
+              addSlideImage(pSlide, slide.imageUrl, { x: 5.5, y: 1, w: 4, h: 3.5 });
             }
             break;
 
@@ -267,7 +289,7 @@ const EditorView: React.FC = () => {
         }
       });
 
-      pptx.writeFile({ fileName: `${presentation.title.replace(/<[^>]*>/g, '').substring(0, 30) || 'Presentation'}.pptx` });
+      pptx.writeFile({ fileName: `${presentation.title.replace(/<[^>]*>/g, '').substring(0, 30)}.pptx` });
     } catch (error) {
       console.error('PPTX Export failed:', error);
       alert('Failed to export PowerPoint.');
@@ -771,15 +793,24 @@ const EditorView: React.FC = () => {
         </div>
       </main>
 
-      {isExporting && (
-        <div ref={exportContainerRef} className="fixed -left-[10000px] top-0 pointer-events-none" style={{ width: '1280px' }}>
-          {presentation?.slides.map(slide => (
-            <div key={`export-${slide.id}`} style={{ width: '1280px', height: '720px', overflow: 'hidden' }}>
-              <SlideRenderer slide={slide} onUpdate={() => {}} isActive={true} />
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Off-screen stable container for PDF capture */}
+      <div 
+        ref={exportContainerRef} 
+        className="fixed top-0" 
+        style={{ 
+          left: '-99999px',
+          width: '1280px', 
+          pointerEvents: 'none',
+          visibility: isExporting ? 'visible' : 'hidden',
+          background: '#ffffff'
+        }}
+      >
+        {presentation?.slides.map(slide => (
+          <div key={`export-${slide.id}`} style={{ width: '1280px', height: '720px', overflow: 'hidden', position: 'relative' }}>
+            <SlideRenderer slide={slide} onUpdate={() => {}} isActive={true} disableTransitions={true} />
+          </div>
+        ))}
+      </div>
 
       {showRegenSlideModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

@@ -11,7 +11,7 @@ export const DEMO_PRESENTATION: Presentation = {
       subtitle: 'Sustainable, Smart, and Seamless Transportation',
       content: [],
       layout: SlideLayout.TITLE,
-      imageUrl: 'https://images.unsplash.com/photo-1449156001437-af90bb425750?auto=format&fit=crop&q=80&w=1280',
+      imageUrl: 'https://images.unsplash.com/photo-1619960535025-3a06477c8ef5?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
       imagePrompt: 'Futuristic city with flying taxis and electric pods, sunset, hyper-realistic',
       transitionType: SlideTransition.ZOOM
     },
