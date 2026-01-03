@@ -23,13 +23,22 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - `metadata.json`: App metadata and browser permissions.
 
 ## 3. Architecture & Code Flow
-1. **Generation Flow:** User enters a prompt in `App.tsx` (top 20%) -> Calls `generatePresentation` in `geminiService.ts` -> Model returns JSON -> `App` initiates parallel image generation for all slides using `generateImage` -> State updates with complete text and visual content.
-2. **Demo Flow:** `handleLoadDemo` in `App.tsx` instantly loads the predefined demo presentation from `demo/index.ts` using a static prerendered image (`demo/car.png`) for slides requiring visuals.
-3. **Export Flow:**
-    - **PDF:** `App.tsx` renders all slides in a hidden off-screen container. `html2canvas` iterates through these elements to create high-resolution snapshots which are then embedded into a `jsPDF` instance.
-    - **PPTX:** `pptxgenjs` programmatically constructs a PowerPoint file by mapping slide layouts to native shapes and text objects.
-4. **Editing Flow:** `SlideRenderer` renders the current slide based on `currentSlideIndex`. Title and content items use `RichTextEditor` for formatting.
-5. **Persistence:** `localStorage` is used in `App.tsx` (near the top) to save and reload presentations.
+
+### Slide Management (CRITICAL)
+- **Reordering:** (Implemented in `App.tsx` sidebar) Uses native HTML5 Drag and Drop. `handleDragStart` sets the source index, `handleDragOver` (near middle of `App.tsx`) performs a live preview swap in the state array and updates the current selection index to follow the dragged slide. `handleDragEnd` cleans up the ghost state.
+- **Deletion:** (Implemented in `App.tsx`) Triggered via a trash icon. Uses a confirmation modal (`showDeleteModal`) to prevent accidental data loss. It filters the slides array and safely updates `currentSlideIndex` to the nearest valid neighbor.
+
+### Export Flow (CRITICAL)
+- **UI:** A split-button menu in the header with a down chevron providing format options.
+- **PDF Format:** Uses a hidden container (`exportContainerRef` at bottom of `App.tsx`) that renders the entire presentation at 1280x720px off-screen. `html2canvas` captures these frames with `useCORS: true` for AI images, and `jsPDF` bundles them into a multi-page landscape document.
+- **PPTX Format:** Uses `pptxgenjs` to programmatically build an editable Office file. It maps specific `SlideLayout` enums to corresponding PowerPoint shape and text object configurations (e.g., placing images at specific X/Y coordinates for `IMAGE_LEFT`).
+
+### AI Generation & Demo
+- **Generation Flow:** User enters a prompt -> Calls `generatePresentation` -> Model returns JSON -> `App` initiates parallel image generation for all slides using `generateImage` -> State updates with complete content.
+- **Demo Flow:** `handleLoadDemo` in `App.tsx` instantly loads the predefined demo presentation from `demo/index.ts` using a static prerendered image (`demo/car.png`) for slides requiring visuals.
+
+### Persistence
+- **LocalStorage:** Present at the top of `App.tsx` via `useEffect` and `handleSave`. Saves the entire presentation object and the user's current slide position.
 
 ---
 
