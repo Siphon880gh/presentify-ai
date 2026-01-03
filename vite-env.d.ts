@@ -1,27 +1,9 @@
-// @google/genai Fix: Removed the vite/client reference to resolve "Cannot find type definition file" error.
-// The necessary declarations for static assets are manually provided below.
+// @google/genai Fix: Using shorthand module declarations for assets to resolve "Duplicate identifier 'src'" errors.
+// This approach prevents conflicts that arise when internal variable names are reused in multiple 
+// module augmentations or when manual declarations merge with other provided type definitions.
 
-declare module '*.png' {
-  const src: string;
-  export default src;
-}
-
-declare module '*.jpg' {
-  const src: string;
-  export default src;
-}
-
-declare module '*.jpeg' {
-  const src: string;
-  export default src;
-}
-
-declare module '*.svg' {
-  const src: string;
-  export default src;
-}
-
-declare module '*.gif' {
-  const src: string;
-  export default src;
-}
+declare module '*.png';
+declare module '*.jpg';
+declare module '*.jpeg';
+declare module '*.svg';
+declare module '*.gif';

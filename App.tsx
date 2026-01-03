@@ -114,10 +114,7 @@ const App: React.FC = () => {
   };
 
   const handleLoadDemo = () => {
-    setPresentation({
-      ...DEMO_PRESENTATION,
-      slides: [...DEMO_PRESENTATION.slides]
-    });
+    setPresentation(DEMO_PRESENTATION);
     setCurrentSlideIndex(0);
     setLastSaved(null);
   };
