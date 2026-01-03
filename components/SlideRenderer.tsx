@@ -77,7 +77,6 @@ const RichTextEditor: React.FC<{
       if (!isFocused) {
         editorRef.current.innerHTML = value || '';
         internalValueRef.current = value || '';
-        // Reset history on external non-focused update
         historyRef.current = [value || ''];
         historyIndexRef.current = 0;
       }
@@ -138,7 +137,6 @@ const RichTextEditor: React.FC<{
     internalValueRef.current = content;
     checkStyles();
 
-    // Debounced history save
     if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = window.setTimeout(() => {
       saveToHistory(internalValueRef.current);
@@ -310,7 +308,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
 
   const ImageComponent = () => (
     <div className="bg-gray-100 rounded-xl overflow-hidden flex flex-col relative shadow-inner group h-full">
-      <div className="relative flex-1 min-h-0 bg-slate-200">
+      <div className="relative flex-1 min-h-0 bg-slate-200 flex items-center justify-center">
         {isImageLoading ? (
           <div className="absolute inset-0 bg-slate-100/80 flex items-center justify-center z-10">
             <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -328,11 +326,20 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
             </div>
           </button>
         )}
-        <img 
-          src={slide.imageUrl || `https://picsum.photos/seed/${slide.id}/800/600`} 
-          alt={slide.title} 
-          className="w-full h-full object-cover"
-        />
+        {slide.imageUrl ? (
+          <img 
+            src={slide.imageUrl} 
+            alt={slide.title} 
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="flex flex-col items-center text-slate-400">
+            <svg className="w-12 h-12 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Loading AI Visual...</span>
+          </div>
+        )}
       </div>
       <div className="bg-white border-t p-3 shrink-0">
         <div className="flex items-center space-x-1 mb-1">
@@ -569,8 +576,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
       ? 'transition-zoom-enter' 
       : 'transition-fade-enter';
 
+  // We remove transition-all here to prevent conflicts with @keyframes animations
   return (
-    <div className={`slide-aspect w-full bg-white shadow-2xl rounded-2xl p-12 transition-all duration-300 relative ${isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50 blur-sm pointer-events-none'} ${isActive ? transitionClass : ''}`}>
+    <div className={`slide-aspect w-full bg-white shadow-2xl rounded-2xl p-12 relative ${isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50 blur-sm pointer-events-none'} ${isActive ? transitionClass : ''}`}>
       {renderContent()}
     </div>
   );

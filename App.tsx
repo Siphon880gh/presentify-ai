@@ -1,8 +1,8 @@
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Presentation, Slide, SlideLayout, SlideTransition } from './types';
-import { generatePresentation, regenerateSlide, generateImage, refineSlide } from './services/geminiService';
+import { generatePresentation, generateImage, refineSlide } from './services/geminiService';
 import SlideRenderer from './components/SlideRenderer';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -48,9 +48,12 @@ const EditorView: React.FC = () => {
     if (savedData) {
       try {
         const { presentation: savedPres, index, savedAt } = JSON.parse(savedData);
-        setPresentation(savedPres);
-        setCurrentSlideIndex(index || 0);
-        setLastSaved(savedAt);
+        if (savedPres && Array.isArray(savedPres.slides)) {
+          setPresentation(savedPres);
+          const validIndex = Math.min(index || 0, savedPres.slides.length - 1);
+          setCurrentSlideIndex(Math.max(0, validIndex));
+          setLastSaved(savedAt);
+        }
       } catch (e) {
         console.error("Failed to load saved presentation", e);
       }
@@ -63,7 +66,14 @@ const EditorView: React.FC = () => {
       if (e.key === STORAGE_KEY && e.newValue) {
         try {
           const { index } = JSON.parse(e.newValue);
-          if (index !== undefined) setCurrentSlideIndex(index);
+          if (index !== undefined) {
+            setPresentation(prev => {
+              if (!prev) return prev;
+              const validIndex = Math.min(index, prev.slides.length - 1);
+              setCurrentSlideIndex(Math.max(0, validIndex));
+              return prev;
+            });
+          }
         } catch (err) {
           console.error("Storage sync failed", err);
         }
@@ -73,22 +83,29 @@ const EditorView: React.FC = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!presentation) return;
-    const savedAt = new Date().toLocaleTimeString();
-    const dataToSave = {
-      presentation,
-      index: currentSlideIndex,
-      savedAt
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    setLastSaved(savedAt);
-  };
+    try {
+      const savedAt = new Date().toLocaleTimeString();
+      const dataToSave = {
+        presentation,
+        index: currentSlideIndex,
+        savedAt
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+      setLastSaved(savedAt);
+    } catch (e) {
+      console.warn("Auto-save failed (likely quota exceeded)", e);
+    }
+  }, [presentation, currentSlideIndex]);
 
-  // Auto-save when navigation happens in editor to keep windows in sync
+  // Auto-save with basic debouncing/throttle logic
   useEffect(() => {
-    if (presentation) handleSave();
-  }, [currentSlideIndex]);
+    if (presentation) {
+      const timeout = setTimeout(handleSave, 1000);
+      return () => clearTimeout(timeout);
+    }
+  }, [presentation, currentSlideIndex, handleSave]);
 
   const handleGenerate = async (useHeaderPrompt = true) => {
     const targetPrompt = useHeaderPrompt ? prompt : (presentation?.title || prompt);
@@ -98,39 +115,48 @@ const EditorView: React.FC = () => {
     
     try {
       const data = await generatePresentation(targetPrompt);
-      setStatusMessage('Creating AI-generated visuals for slides...');
       
-      const slidesWithIds = await Promise.all(data.slides.map(async (s: any) => {
-        const id = Math.random().toString(36).substr(2, 9);
-        let imageUrl = `https://picsum.photos/seed/${id}/800/600`;
-        
-        if (s.imagePrompt) {
-          try {
-            imageUrl = await generateImage(s.imagePrompt);
-          } catch (e) {
-            console.error("Visual generation failed for slide", e);
-          }
-        }
-        
-        return {
-          ...s,
-          id,
-          imageUrl,
-        };
+      const slidesWithIds = data.slides.map((s: any) => ({
+        ...s,
+        id: Math.random().toString(36).substr(2, 9),
+        imageUrl: '',
       }));
       
-      setPresentation({
+      const newPresentation: Presentation = {
         id: Math.random().toString(36).substr(2, 9),
         title: data.title,
         slides: slidesWithIds
-      });
+      };
+
+      setPresentation(newPresentation);
       setCurrentSlideIndex(0);
       setLastSaved(null);
+      setIsGenerating(false);
+
+      // Load images one by one to avoid overwhelming state/network
+      for (let i = 0; i < slidesWithIds.length; i++) {
+        const slide = slidesWithIds[i];
+        if (slide.imagePrompt) {
+          try {
+            const imageUrl = await generateImage(slide.imagePrompt);
+            setPresentation(prev => {
+              if (!prev || prev.id !== newPresentation.id) return prev;
+              const updatedSlides = [...prev.slides];
+              if (updatedSlides[i]) {
+                updatedSlides[i] = { ...updatedSlides[i], imageUrl };
+              }
+              return { ...prev, slides: updatedSlides };
+            });
+          } catch (e) {
+            console.error(`Visual generation failed for slide ${i}`, e);
+          }
+        }
+      }
     } catch (error) {
       console.error(error);
       alert('Failed to generate presentation. Please try again.');
-    } finally {
       setIsGenerating(false);
+    } finally {
       setStatusMessage('');
     }
   };
@@ -269,7 +295,7 @@ const EditorView: React.FC = () => {
       const newSlide: Slide = {
         ...currentSlide,
         ...refinedData,
-        id: currentSlide.id, // Explicitly preserve ID
+        id: currentSlide.id,
       };
       updateSlide(newSlide);
       setShowRegenSlideModal(false);
@@ -285,7 +311,6 @@ const EditorView: React.FC = () => {
   const openRegenSlideModal = () => {
     if (!presentation) return;
     const currentSlide = presentation.slides[currentSlideIndex];
-    // Prepopulate with title and content
     const contentText = currentSlide.content.map(c => c.replace(/<[^>]*>/g, '')).join('\n');
     const titleText = currentSlide.title.replace(/<[^>]*>/g, '');
     setTempRegenPrompt(`Refine this slide:\nTitle: ${titleText}\nContent:\n${contentText}`);
@@ -320,13 +345,6 @@ const EditorView: React.FC = () => {
     if (!presentation) return;
     const currentSlide = presentation.slides[currentSlideIndex];
     updateSlide({ ...currentSlide, transitionType });
-  };
-
-  const applyTransitionToAll = () => {
-    if (!presentation) return;
-    const currentTransition = presentation.slides[currentSlideIndex].transitionType || SlideTransition.FADE;
-    const newSlides = presentation.slides.map(s => ({ ...s, transitionType: currentTransition }));
-    setPresentation({ ...presentation, slides: newSlides });
   };
 
   const addSlide = () => {
@@ -409,7 +427,11 @@ const EditorView: React.FC = () => {
     window.open('#/present', 'PresenterWindow', 'width=1200,height=800');
   };
 
-  const activeSlide = presentation?.slides[currentSlideIndex];
+  const activeSlide = useMemo(() => {
+    if (!presentation || !presentation.slides) return null;
+    const index = Math.min(currentSlideIndex, presentation.slides.length - 1);
+    return presentation.slides[Math.max(0, index)];
+  }, [presentation, currentSlideIndex]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 overflow-hidden h-screen">
@@ -510,7 +532,7 @@ const EditorView: React.FC = () => {
                       >
                         <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:bg-orange-100 transition-colors">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
                           </svg>
                         </div>
                         <div className="flex flex-col">
@@ -553,14 +575,14 @@ const EditorView: React.FC = () => {
                     onDragEnd={handleDragEnd}
                     className={`group relative flex items-center p-2 rounded-lg cursor-pointer transition-all ${
                       currentSlideIndex === index 
-                        ? 'bg-indigo-50 text-indigo-700' 
+                        ? 'bg-indigo-50 text-indigo-700 font-bold' 
                         : 'hover:bg-slate-50 text-slate-600'
                     } ${draggedIndex === index ? 'opacity-40 grayscale scale-95' : ''}`}
                     onClick={() => setCurrentSlideIndex(index)}
                   >
                     <div className="mr-3 text-xs font-mono opacity-30 w-4">{index + 1}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" dangerouslySetInnerHTML={{ __html: slide.title || 'Untitled Slide' }} />
+                      <p className="text-sm truncate" dangerouslySetInnerHTML={{ __html: slide.title || 'Untitled Slide' }} />
                     </div>
                   </div>
                 ))}
@@ -599,7 +621,7 @@ const EditorView: React.FC = () => {
         </aside>
 
         <div className="flex-1 overflow-y-auto p-12 bg-slate-100 flex flex-col items-center custom-scrollbar">
-          {(isGenerating || isImageGenerating || isExporting) && statusMessage && (
+          {(isGenerating || isExporting) && statusMessage && (
             <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
                <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                <p className="text-xl font-medium text-slate-800 animate-pulse">{statusMessage}</p>
@@ -611,7 +633,7 @@ const EditorView: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-1">Slide {currentSlideIndex + 1}</span>
-                  <h2 className="text-2xl font-bold text-slate-800">{presentation.title}</h2>
+                  <h2 className="text-2xl font-bold text-slate-800 truncate max-w-xl">{presentation.title}</h2>
                 </div>
                 <div className="flex items-center space-x-2">
                    <button 
@@ -636,7 +658,7 @@ const EditorView: React.FC = () => {
               </div>
 
               <SlideRenderer 
-                key={`${currentSlideIndex}-${activeSlide.transitionType}`}
+                key={activeSlide.id}
                 slide={activeSlide} 
                 onUpdate={updateSlide}
                 isActive={true}
@@ -693,7 +715,7 @@ const EditorView: React.FC = () => {
 
                     <div className="flex items-center space-x-2 bg-slate-50 p-1 rounded-xl">
                       <button 
-                        onClick={() => setCurrentSlideIndex(Math.max(0, currentSlideIndex - 1))}
+                        onClick={() => setCurrentSlideIndex(prev => Math.max(0, prev - 1))}
                         disabled={currentSlideIndex === 0}
                         className="p-1.5 hover:bg-white disabled:opacity-30 rounded-lg transition-all"
                       >
@@ -705,7 +727,7 @@ const EditorView: React.FC = () => {
                         {currentSlideIndex + 1} / {presentation.slides.length}
                       </span>
                       <button 
-                        onClick={() => setCurrentSlideIndex(Math.min(presentation.slides.length - 1, currentSlideIndex + 1))}
+                        onClick={() => setCurrentSlideIndex(prev => Math.min(presentation.slides.length - 1, prev + 1))}
                         disabled={currentSlideIndex === presentation.slides.length - 1}
                         className="p-1.5 hover:bg-white disabled:opacity-30 rounded-lg transition-all"
                       >
@@ -749,13 +771,15 @@ const EditorView: React.FC = () => {
         </div>
       </main>
 
-      <div ref={exportContainerRef} className="fixed -left-[10000px] top-0 pointer-events-none" style={{ width: '1280px' }}>
-        {presentation?.slides.map(slide => (
-          <div key={`export-${slide.id}`} style={{ width: '1280px', height: '720px', overflow: 'hidden' }}>
-            <SlideRenderer slide={slide} onUpdate={() => {}} isActive={true} />
-          </div>
-        ))}
-      </div>
+      {isExporting && (
+        <div ref={exportContainerRef} className="fixed -left-[10000px] top-0 pointer-events-none" style={{ width: '1280px' }}>
+          {presentation?.slides.map(slide => (
+            <div key={`export-${slide.id}`} style={{ width: '1280px', height: '720px', overflow: 'hidden' }}>
+              <SlideRenderer slide={slide} onUpdate={() => {}} isActive={true} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {showRegenSlideModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -823,8 +847,11 @@ const PresenterView: React.FC = () => {
     if (savedData) {
       try {
         const { presentation: savedPres, index } = JSON.parse(savedData);
-        setPresentation(savedPres);
-        setCurrentSlideIndex(index || 0);
+        if (savedPres && Array.isArray(savedPres.slides)) {
+          setPresentation(savedPres);
+          const validIndex = Math.min(index || 0, savedPres.slides.length - 1);
+          setCurrentSlideIndex(Math.max(0, validIndex));
+        }
       } catch (e) {
         console.error("Failed to load for presenter", e);
       }
@@ -844,8 +871,12 @@ const PresenterView: React.FC = () => {
     if (!presentation) return;
     const index = Math.max(0, Math.min(newIndex, presentation.slides.length - 1));
     setCurrentSlideIndex(index);
-    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, index }));
+    try {
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, index }));
+    } catch (e) {
+      console.warn("Storage update failed", e);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -859,6 +890,8 @@ const PresenterView: React.FC = () => {
 
   const currentSlide = presentation.slides[currentSlideIndex];
   const nextSlide = presentation.slides[currentSlideIndex + 1];
+
+  if (!currentSlide) return <div className="bg-slate-900 h-screen flex items-center justify-center text-white text-xl">Presentation content is missing or corrupted.</div>;
 
   return (
     <div className="bg-slate-950 h-screen flex flex-col p-6 text-white font-sans overflow-hidden">
