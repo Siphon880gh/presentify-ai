@@ -4,6 +4,26 @@ import { SlideLayout, Slide, SlideTransition } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+export const generateImage = async (prompt: string): Promise<string> => {
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash-image',
+    contents: {
+      parts: [
+        {
+          text: prompt,
+        },
+      ],
+    },
+  });
+
+  for (const part of response.candidates[0].content.parts) {
+    if (part.inlineData) {
+      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    }
+  }
+  throw new Error("No image data returned from API");
+};
+
 export const generatePresentation = async (prompt: string): Promise<any> => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
@@ -81,9 +101,18 @@ export const refineSlide = async (topic: string, refinementPrompt: string): Prom
   });
 
   const slideData = JSON.parse(response.text || "{}");
+  let imageUrl = undefined;
+  if (slideData.imagePrompt) {
+    try {
+      imageUrl = await generateImage(slideData.imagePrompt);
+    } catch (e) {
+      console.error("Failed to generate refined slide image", e);
+    }
+  }
+  
   return {
     ...slideData,
-    imageUrl: slideData.imagePrompt ? `https://picsum.photos/seed/${encodeURIComponent(slideData.imagePrompt)}/800/600` : undefined
+    imageUrl
   };
 };
 
@@ -118,29 +147,17 @@ export const regenerateSlide = async (topic: string, slideContext: string): Prom
   });
 
   const slideData = JSON.parse(response.text || "{}");
-  return {
-    ...slideData,
-    imageUrl: slideData.imagePrompt ? `https://picsum.photos/seed/${encodeURIComponent(slideData.imagePrompt)}/800/600` : undefined
-  };
-};
-
-export const generateImage = async (prompt: string): Promise<string> => {
-  const aiImage = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await aiImage.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: {
-      parts: [
-        {
-          text: prompt,
-        },
-      ],
-    },
-  });
-
-  for (const part of response.candidates[0].content.parts) {
-    if (part.inlineData) {
-      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+  let imageUrl = undefined;
+  if (slideData.imagePrompt) {
+    try {
+      imageUrl = await generateImage(slideData.imagePrompt);
+    } catch (e) {
+      console.error("Failed to generate regenerated slide image", e);
     }
   }
-  throw new Error("No image data returned from API");
+
+  return {
+    ...slideData,
+    imageUrl
+  };
 };

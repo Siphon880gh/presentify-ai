@@ -114,14 +114,29 @@ const App: React.FC = () => {
     const targetPrompt = useHeaderPrompt ? prompt : (presentation?.title || prompt);
     if (!targetPrompt.trim()) return;
     setIsGenerating(true);
-    setStatusMessage('Generating entire slideshow...');
+    setStatusMessage('Generating presentation structure...');
     
     try {
       const data = await generatePresentation(targetPrompt);
-      const slidesWithIds = data.slides.map((s: any) => ({
-        ...s,
-        id: Math.random().toString(36).substr(2, 9),
-        imageUrl: s.imagePrompt ? `https://picsum.photos/seed/${encodeURIComponent(s.imagePrompt)}/800/600` : `https://picsum.photos/seed/${Math.random()}/800/600`,
+      setStatusMessage('Creating AI-generated visuals for slides...');
+      
+      const slidesWithIds = await Promise.all(data.slides.map(async (s: any) => {
+        const id = Math.random().toString(36).substr(2, 9);
+        let imageUrl = `https://picsum.photos/seed/${id}/800/600`;
+        
+        if (s.imagePrompt) {
+          try {
+            imageUrl = await generateImage(s.imagePrompt);
+          } catch (e) {
+            console.error("Visual generation failed for slide", e);
+          }
+        }
+        
+        return {
+          ...s,
+          id,
+          imageUrl,
+        };
       }));
       
       setPresentation({
@@ -163,7 +178,7 @@ const App: React.FC = () => {
   const handleRefineSlideSubmit = async () => {
     if (!presentation) return;
     setIsGenerating(true);
-    setStatusMessage('Refining slide with AI...');
+    setStatusMessage('Refining slide and visuals...');
     try {
       const currentSlide = presentation.slides[currentSlideIndex];
       const refinedData = await refineSlide(presentation.title, tempRegenPrompt);
