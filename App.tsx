@@ -114,15 +114,9 @@ const App: React.FC = () => {
   };
 
   const handleLoadDemo = () => {
-    // For demo slides, use the absolute path /demo/car.png for slides with image prompts
-    const slidesWithImages = DEMO_PRESENTATION.slides.map((s) => ({
-      ...s,
-      imageUrl: s.imagePrompt ? '/demo/car.png' : undefined
-    }));
-
     setPresentation({
       ...DEMO_PRESENTATION,
-      slides: slidesWithImages
+      slides: [...DEMO_PRESENTATION.slides]
     });
     setCurrentSlideIndex(0);
     setLastSaved(null);
