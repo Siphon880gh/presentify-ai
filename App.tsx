@@ -208,7 +208,11 @@ const EditorView: React.FC = () => {
             break;
 
           case SlideLayout.IMAGE_LEFT:
-            if (slide.imageUrl) pSlide.addImage({ data: slide.imageUrl, x: 0.5, y: 1, w: 4, h: 3.5 });
+            if (slide.imageUrl) {
+              const isData = slide.imageUrl.startsWith('data:');
+              const imgVal = isData ? slide.imageUrl.split(',')[1] : slide.imageUrl;
+              pSlide.addImage({ [isData ? 'data' : 'path']: imgVal, x: 0.5, y: 1, w: 4, h: 3.5 });
+            }
             pSlide.addText(cleanTitle, { x: 5, y: 1, w: 4.5, fontSize: 28, bold: true, color: '333333' });
             pSlide.addText(cleanContent.map(text => ({ text, options: { bullet: true } })), { x: 5, y: 2, w: 4.5, fontSize: 16, color: '555555' });
             break;
@@ -216,7 +220,11 @@ const EditorView: React.FC = () => {
           case SlideLayout.IMAGE_RIGHT:
             pSlide.addText(cleanTitle, { x: 0.5, y: 1, w: 4.5, fontSize: 28, bold: true, color: '333333' });
             pSlide.addText(cleanContent.map(text => ({ text, options: { bullet: true } })), { x: 0.5, y: 2, w: 4.5, fontSize: 16, color: '555555' });
-            if (slide.imageUrl) pSlide.addImage({ data: slide.imageUrl, x: 5.5, y: 1, w: 4, h: 3.5 });
+            if (slide.imageUrl) {
+              const isData = slide.imageUrl.startsWith('data:');
+              const imgVal = isData ? slide.imageUrl.split(',')[1] : slide.imageUrl;
+              pSlide.addImage({ [isData ? 'data' : 'path']: imgVal, x: 5.5, y: 1, w: 4, h: 3.5 });
+            }
             break;
 
           case SlideLayout.QUOTE:

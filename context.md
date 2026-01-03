@@ -24,13 +24,14 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ## 3. Architecture & Code Flow
 
-### Presenter Mode Synchronization (NEW)
+### Presenter Mode Synchronization
 - **Mechanism:** Leverages `localStorage` combined with the browser's `storage` event.
 - **Flow:** When the user navigates or edits in the `EditorView`, the state is saved to `localStorage`. The `PresenterView` (usually in a separate window) listens for these changes and updates its UI in real-time. Navigation in the `PresenterView` also updates `localStorage`, keeping the `EditorView` synchronized.
 
 ### Export Flow
 - **UI:** A split-button menu in the header with format options.
 - **PDF/PPTX:** Captured via off-screen rendering or programmatic mapping of layouts to PowerPoint objects.
+- **PPTX Fix:** Added logic to handle both external URLs and data URLs for images. Data URLs are stripped of their metadata prefix before being passed to the `data` property of `pptxgenjs`.
 
 ---
 
