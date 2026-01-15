@@ -1,3 +1,4 @@
+
 # Presentify AI - Project Context
 
 > [!NOTE]
@@ -15,14 +16,24 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header and the **Prompt Wizard** with source grounding.
-- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
+- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization.
+- `EditorView`: Manages presentation state, slide navigation, library management, and **Advanced Edit Mode** toggling. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
 - `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Now includes an **Auto-Play** mode that uses TTS to read notes and advance slides.
-- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor`.
-- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation and TTS audio generation via `speakText`.
-- `types.ts`: Schema definitions for the application.
+- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images).
+- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement via `refineSlide`.
+- `types.ts`: Schema definitions, now including `FloatingElement` and updated `Slide` schema.
+- `demo/index.ts`: Sample presentation data.
 
 ## 3. Architecture & Code Flow
+
+### UI/UX: Edit Mode & Canvas Editing
+- **Toggle Mechanism:** An "Edit Mode" button in the header activates specialized editing tools.
+- **Slide Reordering:** When in Edit Mode, the slide outline in the `Aside` becomes draggable (HTML5 Drag and Drop API), allowing users to re-sequence slides instantly.
+- **Single Slide Regeneration:** A floating toolbar in the editor allows users to regenerate the active slide with a custom AI prompt, leveraging the `refineSlide` service for targeted updates.
+- **Floating Elements:** Users can add independent text and image elements to any slide. 
+  - **Text:** Uses the `RichTextEditor` for consistent styling.
+  - **Images:** Can be added via direct URL or generated on-the-fly via AI prompts.
+  - **Draggable:** Elements use percentage-based positioning (`x`, `y`) to remain responsive and can be repositioned within the slide bounds during Edit Mode.
 
 ### UI/UX: Prompt Field & Wizard
 - **Layout Stability:** The header uses fixed-width side containers for the logo (left) and button group (right) to prevent the center prompt from shifting horizontally when buttons animate their inline labels.

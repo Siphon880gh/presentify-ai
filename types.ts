@@ -14,6 +14,16 @@ export enum SlideTransition {
   ZOOM = 'ZOOM'
 }
 
+export interface FloatingElement {
+  id: string;
+  type: 'text' | 'image';
+  content: string;
+  x: number; // percentage 0-100
+  y: number; // percentage 0-100
+  width?: number;
+  height?: number;
+}
+
 export interface Slide {
   id: string;
   title: string;
@@ -24,6 +34,7 @@ export interface Slide {
   imageUrl?: string;
   transitionType?: SlideTransition;
   notes?: string;
+  floatingElements?: FloatingElement[];
 }
 
 export interface Presentation {

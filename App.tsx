@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { Presentation, Slide, SlideLayout, SlideTransition } from './types';
+import { Presentation, Slide, SlideLayout, SlideTransition, FloatingElement } from './types';
 import { generatePresentation, generateImage, refineSlide, speakText } from './services/geminiService';
 import SlideRenderer from './components/SlideRenderer';
 import { jsPDF } from 'jspdf';
@@ -126,14 +126,14 @@ const TooltipButton: React.FC<{
   title: string;
   children: React.ReactNode;
   className?: string;
-}> = ({ onClick, title, children }) => {
+}> = ({ onClick, title, children, className }) => {
   const [isHovered, setIsHovered] = useState(false);
   return (
     <button
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`flex items-center h-10 px-2 rounded-xl transition-all duration-300 ease-out group ${isHovered ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-50'}`}
+      className={`flex items-center h-10 px-2 rounded-xl transition-all duration-300 ease-out group ${className} ${isHovered ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-50'}`}
     >
       <div className="shrink-0 flex items-center justify-center w-6 h-6">
         {children}
@@ -165,6 +165,18 @@ const EditorView: React.FC = () => {
   const [savedLibrary, setSavedLibrary] = useState<SavedPresentationMeta[]>([]);
   const [isFullscreenPresenting, setIsFullscreenPresenting] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+
+  // Edit Mode State
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showRegenModal, setShowRegenModal] = useState(false);
+  const [regenPrompt, setRegenPrompt] = useState('');
+  const [showImageAddModal, setShowImageAddModal] = useState(false);
+  const [imageInputUrl, setImageInputUrl] = useState('');
+  const [imageAIPrompt, setImageAIPrompt] = useState('');
+
+  // Drag handles for outline
+  const slideDragItem = useRef<number | null>(null);
+  const slideDragOverItem = useRef<number | null>(null);
 
   // Wizard state
   const [wizardPrompt, setWizardPrompt] = useState('');
@@ -205,7 +217,6 @@ const EditorView: React.FC = () => {
       }
     };
     window.addEventListener('mousedown', handleOutsideClick);
-    /* Fixed: Changed window.removeHierarchy to window.removeEventListener to correctly clean up the event listener. */
     return () => window.removeEventListener('mousedown', handleOutsideClick);
   }, [showExportMenu, showWizardDropdown]);
 
@@ -444,7 +455,6 @@ const EditorView: React.FC = () => {
           contentW = '45%';
         }
         
-        // Fix: Provide an array of text objects with the bullet option enabled
         const bulletObjects = slide.content.map(text => ({
           text: text.replace(/<[^>]*>/g, ''),
           options: { bullet: true, fontSize: 18, color: '444444' }
@@ -491,6 +501,82 @@ const EditorView: React.FC = () => {
     return presentation.slides[currentSlideIndex];
   }, [presentation, currentSlideIndex]);
 
+  // Slide Reordering Handlers
+  const handleSlideDragStart = (index: number) => { slideDragItem.current = index; };
+  const handleSlideDragOver = (index: number) => { slideDragOverItem.current = index; };
+  const handleSlideDragEnd = () => {
+    if (slideDragItem.current !== null && slideDragOverItem.current !== null && presentation) {
+      const copy = [...presentation.slides];
+      const draggedItemContent = copy[slideDragItem.current];
+      copy.splice(slideDragItem.current, 1);
+      copy.splice(slideDragOverItem.current, 0, draggedItemContent);
+      setPresentation({ ...presentation, slides: copy });
+      if (currentSlideIndex === slideDragItem.current) {
+        setCurrentSlideIndex(slideDragOverItem.current);
+      } else if (currentSlideIndex > slideDragItem.current && currentSlideIndex <= slideDragOverItem.current) {
+        setCurrentSlideIndex(currentSlideIndex - 1);
+      } else if (currentSlideIndex < slideDragItem.current && currentSlideIndex >= slideDragOverItem.current) {
+        setCurrentSlideIndex(currentSlideIndex + 1);
+      }
+      slideDragItem.current = null;
+      slideDragOverItem.current = null;
+    }
+  };
+
+  // Floating Element Management
+  const addFloatingElement = (type: 'text' | 'image', content: string = 'New text element') => {
+    if (!activeSlide) return;
+    const newEl: FloatingElement = {
+      id: Math.random().toString(36).substr(2, 9),
+      type,
+      content,
+      x: 50,
+      y: 50,
+    };
+    updateSlide({
+      ...activeSlide,
+      floatingElements: [...(activeSlide.floatingElements || []), newEl]
+    });
+  };
+
+  const handleRegenerateActiveSlide = async () => {
+    if (!activeSlide || !presentation) return;
+    setIsGenerating(true);
+    setStatusMessage('Regenerating slide...');
+    try {
+      const refined = await refineSlide(presentation.title, regenPrompt || 'Refine this slide with fresh content and better structure.');
+      updateSlide({ ...activeSlide, ...refined });
+      setShowRegenModal(false);
+      setRegenPrompt('');
+    } catch (e) {
+      alert('Regeneration failed.');
+    } finally {
+      setIsGenerating(false);
+      setStatusMessage('');
+    }
+  };
+
+  const handleAddImageElement = async (source: 'url' | 'ai' | 'paste') => {
+    if (!activeSlide) return;
+    let url = '';
+    if (source === 'url') url = imageInputUrl;
+    else if (source === 'ai') {
+      setIsGenerating(true);
+      setStatusMessage('Generating AI Image...');
+      try {
+        url = await generateImage(imageAIPrompt);
+      } catch (e) { alert('Image generation failed.'); }
+      finally { setIsGenerating(false); setStatusMessage(''); }
+    }
+    
+    if (url) {
+      addFloatingElement('image', url);
+      setShowImageAddModal(false);
+      setImageInputUrl('');
+      setImageAIPrompt('');
+    }
+  };
+
   if (isFullscreenPresenting && presentation) {
     return <PresenterView presentation={presentation} initialIndex={currentSlideIndex} onExit={() => setIsFullscreenPresenting(false)} />;
   }
@@ -498,7 +584,6 @@ const EditorView: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 overflow-hidden h-screen">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-50 shrink-0 shadow-sm">
-        {/* Fixed-width logo container to stabilize center */}
         <div className={`flex items-center space-x-2 transition-all duration-500 ease-in-out shrink-0 ${isExpanded ? 'w-0 opacity-0 overflow-hidden' : 'w-60'}`}>
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
@@ -541,8 +626,15 @@ const EditorView: React.FC = () => {
           </div>
         </div>
 
-        {/* Fixed-width button container to prevent layout shifts during inline label animation */}
-        <div className="flex items-center justify-end space-x-1 w-[320px] shrink-0">
+        <div className="flex items-center justify-end space-x-1 w-[380px] shrink-0">
+          <TooltipButton
+            onClick={() => setIsEditMode(!isEditMode)}
+            title={isEditMode ? "Exit Edit" : "Edit Mode"}
+            className={isEditMode ? "bg-amber-100 text-amber-600 border border-amber-200" : ""}
+          >
+             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+          </TooltipButton>
+
           <TooltipButton
             onClick={handleLoadDemo}
             title="Load Demo"
@@ -588,33 +680,64 @@ const EditorView: React.FC = () => {
       </header>
 
       <main className="flex-1 flex overflow-hidden">
-        <aside className={`${isOutlineCollapsed ? 'w-16' : 'w-72'} bg-white border-r flex flex-col transition-all duration-300`}>
+        <aside className={`${isOutlineCollapsed ? 'w-16' : 'w-72'} bg-white border-r flex flex-col transition-all duration-300 relative`}>
           <div className="p-4 border-b flex items-center justify-between">
-            {!isOutlineCollapsed && <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Outline</h3>}
+            {!isOutlineCollapsed && <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Outline {isEditMode && '(Draggable)'}</h3>}
             <button onClick={() => setIsOutlineCollapsed(!isOutlineCollapsed)} className="p-1 hover:bg-slate-100 rounded text-slate-400">
               <svg className={`w-5 h-5 transition-transform ${isOutlineCollapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 19l-7-7 7-7m8 14l-7-7 7-7" strokeWidth={2}/></svg>
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {presentation?.slides.map((s, i) => (
-              <button key={s.id} onClick={() => setCurrentSlideIndex(i)} className={`w-full flex items-center p-2 rounded-lg text-left transition-all ${currentSlideIndex === i ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-slate-50 text-slate-600'}`}>
+              <button 
+                key={s.id} 
+                draggable={isEditMode}
+                onDragStart={() => handleSlideDragStart(i)}
+                onDragOver={(e) => { e.preventDefault(); handleSlideDragOver(i); }}
+                onDragEnd={handleSlideDragEnd}
+                onClick={() => setCurrentSlideIndex(i)} 
+                className={`w-full flex items-center p-2 rounded-lg text-left transition-all ${currentSlideIndex === i ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-slate-50 text-slate-600'} ${isEditMode ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              >
                 <span className="w-5 text-xs opacity-30 font-mono">{i + 1}</span>
                 <span className="truncate text-xs flex-1">{s.title.replace(/<[^>]*>/g, '') || 'Untitled Slide'}</span>
+                {isEditMode && (
+                  <svg className="w-3 h-3 text-slate-300 opacity-50 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M7 15h10v2H7zm0-4h10v2H7zm0-4h10v2H7z"/></svg>
+                )}
               </button>
             ))}
           </div>
         </aside>
 
-        <div className="flex-1 bg-slate-100 overflow-y-auto p-12 flex flex-col items-center">
+        <div className="flex-1 bg-slate-100 overflow-y-auto p-12 flex flex-col items-center relative">
           {statusMessage && (
             <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm">
                <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                <p className="text-lg font-bold text-slate-800 animate-pulse">{statusMessage}</p>
             </div>
           )}
+          
+          {isEditMode && activeSlide && (
+            <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur shadow-2xl rounded-full px-6 py-3 border border-indigo-100 flex items-center space-x-4 z-[100] animate-in slide-in-from-bottom-4 duration-300">
+               <button onClick={() => addFloatingElement('text')} className="flex items-center space-x-2 text-xs font-bold text-indigo-600 hover:text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-50">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 6h16M4 12h16M4 18h7" strokeWidth={2}/></svg>
+                  <span>+ Text</span>
+               </button>
+               <div className="w-px h-4 bg-slate-200" />
+               <button onClick={() => setShowImageAddModal(true)} className="flex items-center space-x-2 text-xs font-bold text-indigo-600 hover:text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-50">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeWidth={2}/></svg>
+                  <span>+ Image</span>
+               </button>
+               <div className="w-px h-4 bg-slate-200" />
+               <button onClick={() => setShowRegenModal(true)} className="flex items-center space-x-2 text-xs font-bold text-purple-600 hover:text-purple-700 px-2 py-1 rounded-lg hover:bg-purple-50">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2}/></svg>
+                  <span>Regenerate Slide</span>
+               </button>
+            </div>
+          )}
+
           {presentation && activeSlide ? (
             <div className="w-full max-w-5xl">
-              <SlideRenderer slide={activeSlide} onUpdate={updateSlide} isActive={true} />
+              <SlideRenderer slide={activeSlide} onUpdate={updateSlide} isActive={true} isEditMode={isEditMode} />
               <div className="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Speaker Notes</div>
                 <textarea 
@@ -649,6 +772,46 @@ const EditorView: React.FC = () => {
         </div>
       )}
 
+      {showRegenModal && (
+        <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-2">Regenerate Slide</h3>
+            <p className="text-xs text-slate-400 mb-4">Tell the AI what to change about this specific slide.</p>
+            <textarea value={regenPrompt} onChange={(e) => setRegenPrompt(e.target.value)} className="w-full border p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-purple-500 h-24 resize-none text-sm" placeholder="e.g., Make it more data-focused, change the tone to professional..." />
+            <div className="flex justify-end space-x-3">
+              <button onClick={() => setShowRegenModal(false)} className="px-6 py-2 text-slate-400">Cancel</button>
+              <button onClick={handleRegenerateActiveSlide} className="bg-purple-600 text-white px-8 py-2 rounded-xl font-bold">Regenerate</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImageAddModal && (
+        <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-4">Add Floating Image</h3>
+            <div className="space-y-6">
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">From URL</label>
+                 <div className="flex space-x-2">
+                    <input type="text" value={imageInputUrl} onChange={(e) => setImageInputUrl(e.target.value)} className="flex-1 border p-2 rounded-lg text-xs outline-none" placeholder="https://..." />
+                    <button onClick={() => handleAddImageElement('url')} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Add</button>
+                 </div>
+               </div>
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Generated</label>
+                 <textarea value={imageAIPrompt} onChange={(e) => setImageAIPrompt(e.target.value)} className="w-full border p-2 rounded-lg text-xs outline-none h-20 resize-none" placeholder="Describe the image you want..." />
+                 <button onClick={() => handleAddImageElement('ai')} className="w-full bg-purple-600 text-white py-2 rounded-lg text-xs font-bold">Generate & Add</button>
+               </div>
+               <div className="pt-4 border-t text-center">
+                 <p className="text-[10px] text-slate-400">Images are added as draggable floating elements.</p>
+               </div>
+            </div>
+            <button onClick={() => setShowImageAddModal(false)} className="mt-6 w-full py-2 text-slate-400 text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {showOpenModal && (
         <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
@@ -679,7 +842,6 @@ const EditorView: React.FC = () => {
         </div>
       )}
 
-      {/* Hidden container for capture */}
       <div ref={exportContainerRef} className="fixed top-0 left-[-9999px]" style={{ width: '1280px' }}>
         {presentation?.slides.map(s => (
           <div key={s.id} style={{ width: '1280px', height: '720px', overflow: 'hidden' }}>
