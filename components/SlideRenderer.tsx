@@ -18,7 +18,8 @@ const RichTextEditor: React.FC<{
   className: string;
   placeholder?: string;
   isFloating?: boolean;
-}> = ({ value, onUpdate, className, placeholder, isFloating }) => {
+  readOnly?: boolean;
+}> = ({ value, onUpdate, className, placeholder, isFloating, readOnly }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [activeStyles, setActiveStyles] = useState<{ [key: string]: any }>({});
   const editorRef = useRef<HTMLDivElement>(null);
@@ -184,6 +185,7 @@ const RichTextEditor: React.FC<{
   };
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
+    if (readOnly) return;
     const target = e.currentTarget;
     let content = target.innerHTML;
     if (target.innerText.toLowerCase().includes('::img')) {
@@ -213,6 +215,7 @@ const RichTextEditor: React.FC<{
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (readOnly) return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
       e.preventDefault();
       if (e.shiftKey) handleRedo(); else handleUndo();
@@ -224,7 +227,7 @@ const RichTextEditor: React.FC<{
     }
   };
 
-  const handleFocus = () => { setIsFocused(true); checkStyles(); };
+  const handleFocus = () => { if (!readOnly) { setIsFocused(true); checkStyles(); } };
 
   const handleBlur = (e: React.FocusEvent) => {
     if (containerRef.current && containerRef.current.contains(e.relatedTarget as Node)) return;
@@ -247,9 +250,9 @@ const RichTextEditor: React.FC<{
       ref={containerRef}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      className={`relative w-full group ${isFloating ? 'cursor-text' : ''}`}
+      className={`relative w-full group ${isFloating && !readOnly ? 'cursor-text' : ''}`}
     >
-      {isFocused && (
+      {isFocused && !readOnly && (
         <div className={`absolute ${isFloating ? '-top-14' : '-top-12'} left-0 flex items-center bg-white shadow-xl border border-slate-200 rounded-lg p-1 z-[100] space-x-1 animate-in fade-in slide-in-from-bottom-2 duration-200`}>
           <button onMouseDown={(e) => { e.preventDefault(); handleUndo(); checkStyles(); }} disabled={!activeStyles.canUndo} className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.canUndo ? 'hover:bg-slate-100 text-slate-700' : 'text-slate-300 opacity-50 cursor-not-allowed'}`} title="Undo"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" strokeWidth={2}/></svg></button>
           <button onMouseDown={(e) => { e.preventDefault(); handleRedo(); checkStyles(); }} disabled={!activeStyles.canRedo} className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${activeStyles.canRedo ? 'hover:bg-slate-100 text-slate-700' : 'text-slate-300 opacity-50 cursor-not-allowed'}`} title="Redo"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" strokeWidth={2}/></svg></button>
@@ -267,15 +270,15 @@ const RichTextEditor: React.FC<{
       )}
       <div
         ref={editorRef}
-        contentEditable
+        contentEditable={!readOnly}
         suppressContentEditableWarning
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onKeyUp={() => { checkStyles(); saveSelection(); }}
         onMouseUp={() => { checkStyles(); saveSelection(); }}
-        className={`${className} focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded transition-all min-h-[1em]`}
+        className={`${className} focus:outline-none ${!readOnly ? 'focus:ring-2 focus:ring-indigo-500/50' : ''} rounded transition-all min-h-[1em]`}
       />
-      {!value && !isFocused && placeholder && (
+      {!value && !isFocused && placeholder && !readOnly && (
         <div className="absolute inset-0 pointer-events-none text-slate-300 px-1 py-1 italic">
           {placeholder}
         </div>
@@ -453,33 +456,37 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
             <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : (
-          <button onClick={onRegenerateImage} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-semibold z-20"><div className="flex flex-col items-center"><svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span>Regenerate Image</span></div></button>
+          isEditMode && (
+            <button onClick={onRegenerateImage} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-semibold z-20"><div className="flex flex-col items-center"><svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span>Regenerate Image</span></div></button>
+          )
         )}
         {slide.imageUrl ? (<img src={slide.imageUrl} alt={slide.title} className="w-full h-full object-cover" />) : (<div className="flex flex-col items-center text-slate-400"><svg className="w-12 h-12 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Loading AI Visual...</span></div>)}
         <LayoutResizeHandle id="layout-image" />
       </div>
-      <div className="bg-white border-t p-3 shrink-0"><div className="flex items-center space-x-1 mb-1"><svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Prompt</span></div><div contentEditable suppressContentEditableWarning onBlur={(e) => handleFieldChange('imagePrompt', e.currentTarget.innerText)} className="text-[11px] text-slate-500 italic focus:outline-none focus:ring-1 focus:ring-indigo-500/30 rounded p-1.5 bg-slate-50 border border-transparent hover:border-slate-200 transition-all cursor-text min-h-[3em]">{slide.imagePrompt || ''}</div></div>
+      {isEditMode && (
+        <div className="bg-white border-t p-3 shrink-0"><div className="flex items-center space-x-1 mb-1"><svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Prompt</span></div><div contentEditable suppressContentEditableWarning onBlur={(e) => handleFieldChange('imagePrompt', e.currentTarget.innerText)} className="text-[11px] text-slate-500 italic focus:outline-none focus:ring-1 focus:ring-indigo-500/30 rounded p-1.5 bg-slate-50 border border-transparent hover:border-slate-200 transition-all cursor-text min-h-[3em]">{slide.imagePrompt || ''}</div></div>
+      )}
     </div>
   );
 
-  const AddButton = () => (<button onClick={addContentItem} className="flex items-center space-x-2 text-sm text-indigo-500 hover:text-indigo-600 font-medium p-2 rounded-lg hover:bg-indigo-50 transition-all mt-2 group"><svg className="w-4 h-4 transform group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg><span>Add Item</span></button>);
+  const AddButton = () => isEditMode ? (<button onClick={addContentItem} className="flex items-center space-x-2 text-sm text-indigo-500 hover:text-indigo-600 font-medium p-2 rounded-lg hover:bg-indigo-50 transition-all mt-2 group"><svg className="w-4 h-4 transform group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg><span>Add Item</span></button>) : null;
 
-  const RemoveButton = ({ index }: { index: number }) => (<button onClick={() => removeContentItem(index)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-400 transition-all rounded"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>);
+  const RemoveButton = ({ index }: { index: number }) => isEditMode ? (<button onClick={() => removeContentItem(index)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-400 transition-all rounded"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>) : null;
 
   const renderContent = () => {
     switch (slide.layout) {
       case SlideLayout.TITLE:
-        return (<div className="flex flex-col items-center justify-center h-full text-center space-y-6"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-6xl font-bold text-gray-900" placeholder="Title" /><RichTextEditor key={`${slide.id}-subtitle`} value={slide.subtitle || ''} onUpdate={(val) => handleFieldChange('subtitle', val)} className="text-2xl text-gray-500" placeholder="Subtitle" /></div>);
+        return (<div className="flex flex-col items-center justify-center h-full text-center space-y-6"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-6xl font-bold text-gray-900" placeholder="Title" readOnly={!isEditMode} /><RichTextEditor key={`${slide.id}-subtitle`} value={slide.subtitle || ''} onUpdate={(val) => handleFieldChange('subtitle', val)} className="text-2xl text-gray-500" placeholder="Subtitle" readOnly={!isEditMode} /></div>);
       case SlideLayout.IMAGE_LEFT:
-        return (<div className="grid grid-cols-2 h-full gap-8"><ImageComponent /><div className="flex flex-col justify-center space-y-4 overflow-hidden"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-4xl font-bold text-gray-800" /><div className="space-y-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">{slide.content.map((item, i) => (<div key={`${slide.id}-item-${i}`} className="flex items-start group"><span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${i}`} value={item} onUpdate={(val) => handleContentChange(i, val)} className="text-lg text-gray-600 flex-1" /><RemoveButton index={i} /></div>))}<AddButton /></div></div></div>);
+        return (<div className="grid grid-cols-2 h-full gap-8"><ImageComponent /><div className="flex flex-col justify-center space-y-4 overflow-hidden"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-4xl font-bold text-gray-800" readOnly={!isEditMode} /><div className="space-y-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">{slide.content.map((item, i) => (<div key={`${slide.id}-item-${i}`} className="flex items-start group"><span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${i}`} value={item} onUpdate={(val) => handleContentChange(i, val)} className="text-lg text-gray-600 flex-1" readOnly={!isEditMode} /><RemoveButton index={i} /></div>))}<AddButton /></div></div></div>);
       case SlideLayout.IMAGE_RIGHT:
-        return (<div className="grid grid-cols-2 h-full gap-8"><div className="flex flex-col justify-center space-y-4 overflow-hidden"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-4xl font-bold text-gray-800" /><div className="space-y-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">{slide.content.map((item, i) => (<div key={`${slide.id}-item-${i}`} className="flex items-start group"><span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${i}`} value={item} onUpdate={(val) => handleContentChange(i, val)} className="text-lg text-gray-600 flex-1" /><RemoveButton index={i} /></div>))}<AddButton /></div></div><ImageComponent /></div>);
+        return (<div className="grid grid-cols-2 h-full gap-8"><div className="flex flex-col justify-center space-y-4 overflow-hidden"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-4xl font-bold text-gray-800" readOnly={!isEditMode} /><div className="space-y-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">{slide.content.map((item, i) => (<div key={`${slide.id}-item-${i}`} className="flex items-start group"><span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${i}`} value={item} onUpdate={(val) => handleContentChange(i, val)} className="text-lg text-gray-600 flex-1" readOnly={!isEditMode} /><RemoveButton index={i} /></div>))}<AddButton /></div></div><ImageComponent /></div>);
       case SlideLayout.QUOTE:
-        return (<div className="flex flex-col items-center justify-center h-full max-w-4xl mx-auto space-y-8 italic"><div className="text-6xl text-indigo-300 select-none">"</div><RichTextEditor key={`${slide.id}-content-0`} value={slide.content[0] || ''} onUpdate={(val) => handleContentChange(0, val)} className="text-4xl font-medium text-gray-700 text-center leading-relaxed" placeholder="Write your quote here..." /><div className="h-1 w-20 bg-indigo-500"></div><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-2xl font-bold text-gray-900 not-italic text-center" placeholder="Author" /></div>);
+        return (<div className="flex flex-col items-center justify-center h-full max-w-4xl mx-auto space-y-8 italic"><div className="text-6xl text-indigo-300 select-none">"</div><RichTextEditor key={`${slide.id}-content-0`} value={slide.content[0] || ''} onUpdate={(val) => handleContentChange(0, val)} className="text-4xl font-medium text-gray-700 text-center leading-relaxed" placeholder="Write your quote here..." readOnly={!isEditMode} /><div className="h-1 w-20 bg-indigo-500"></div><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-2xl font-bold text-gray-900 not-italic text-center" placeholder="Author" readOnly={!isEditMode} /></div>);
       case SlideLayout.TWO_COLUMN:
-        return (<div className="flex flex-col h-full space-y-6"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-4xl font-bold text-gray-900 border-b pb-2" /><div className="grid grid-cols-2 gap-8 flex-1 overflow-hidden"><div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">{slide.content.slice(0, Math.ceil(slide.content.length / 2)).map((item, i) => (<div key={`${slide.id}-item-${i}`} className="flex items-start group"><span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${i}`} value={item} onUpdate={(val) => handleContentChange(i, val)} className="text-lg text-gray-600 flex-1" /><RemoveButton index={i} /></div>))}{slide.content.length === 0 && <AddButton />}</div><div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">{slide.content.slice(Math.ceil(slide.content.length / 2)).map((item, i) => { const idx = i + Math.ceil(slide.content.length / 2); return (<div key={`${slide.id}-item-${idx}`} className="flex items-start group"><span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${idx}`} value={item} onUpdate={(val) => handleContentChange(idx, val)} className="text-lg text-gray-600 flex-1" /><RemoveButton index={idx} /></div>); })}<AddButton /></div></div></div>);
+        return (<div className="flex flex-col h-full space-y-6"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-4xl font-bold text-gray-900 border-b pb-2" readOnly={!isEditMode} /><div className="grid grid-cols-2 gap-8 flex-1 overflow-hidden"><div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">{slide.content.slice(0, Math.ceil(slide.content.length / 2)).map((item, i) => (<div key={`${slide.id}-item-${i}`} className="flex items-start group"><span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${i}`} value={item} onUpdate={(val) => handleContentChange(i, val)} className="text-lg text-gray-600 flex-1" readOnly={!isEditMode} /><RemoveButton index={i} /></div>))}{slide.content.length === 0 && <AddButton />}</div><div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">{slide.content.slice(Math.ceil(slide.content.length / 2)).map((item, i) => { const idx = i + Math.ceil(slide.content.length / 2); return (<div key={`${slide.id}-item-${idx}`} className="flex items-start group"><span className="mr-2 mt-2 w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${idx}`} value={item} onUpdate={(val) => handleContentChange(idx, val)} className="text-lg text-gray-600 flex-1" readOnly={!isEditMode} /><RemoveButton index={idx} /></div>); })}<AddButton /></div></div></div>);
       default:
-        return (<div className="flex flex-col h-full space-y-8 overflow-hidden"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-5xl font-bold text-gray-900 border-b-2 border-indigo-100 pb-4" /><div className="flex-1 overflow-y-auto pr-2 custom-scrollbar"><div className="space-y-4">{slide.content.map((item, i) => (<div key={`${slide.id}-item-${i}`} className="flex items-start p-2 hover:bg-gray-50 transition-colors rounded group"><span className="mr-3 mt-2 w-3 h-3 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${i}`} value={item} onUpdate={(val) => handleContentChange(i, val)} className="text-xl text-gray-700 flex-1" /><RemoveButton index={i} /></div>))}</div><div className="mt-4"><AddButton /></div></div></div>);
+        return (<div className="flex flex-col h-full space-y-8 overflow-hidden"><RichTextEditor key={`${slide.id}-title`} value={slide.title} onUpdate={(val) => handleFieldChange('title', val)} className="text-5xl font-bold text-gray-900 border-b-2 border-indigo-100 pb-4" readOnly={!isEditMode} /><div className="flex-1 overflow-y-auto pr-2 custom-scrollbar"><div className="space-y-4">{slide.content.map((item, i) => (<div key={`${slide.id}-item-${i}`} className="flex items-start p-2 hover:bg-gray-50 transition-colors rounded group"><span className="mr-3 mt-2 w-3 h-3 bg-indigo-500 rounded-full flex-shrink-0" /><RichTextEditor key={`${slide.id}-content-${i}`} value={item} onUpdate={(val) => handleContentChange(i, val)} className="text-xl text-gray-700 flex-1" readOnly={!isEditMode} /><RemoveButton index={i} /></div>))}</div><div className="mt-4"><AddButton /></div></div></div>);
     }
   };
 
@@ -540,6 +547,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
               }}
               className="min-w-[100px] text-lg text-slate-800 bg-white/50 backdrop-blur-sm px-2 rounded"
               isFloating={true}
+              readOnly={!isEditMode}
             />
           ) : (
             <div className="relative w-full h-full">

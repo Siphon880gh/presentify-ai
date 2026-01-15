@@ -27,6 +27,8 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ### UI/UX: Edit Mode & Canvas Editing
 - **Toggle Mechanism:** An "Edit Mode" button in the header activates specialized editing tools.
+- **Clean View Implementation:** `SlideRenderer` strictly respects the `isEditMode` prop. When `false` (default for Presenter mode and PDF export), editor-only UI elements are hidden, including "Add Item" buttons, "Remove" buttons, the "Regenerate Image" hover overlay, and the "AI Prompt" label/text block under images.
+- **Text Editing Lock:** `RichTextEditor` now features a `readOnly` state bound to `!isEditMode`, ensuring a clean presentation experience without cursors or focus rings when not in active editing mode.
 - **Slide Reordering:** When in Edit Mode, the slide outline in the `Aside` becomes draggable (HTML5 Drag and Drop API), allowing users to re-sequence slides instantly. A **blue horizontal insert indicator** appears during drag-over to show exactly where the slide will land.
 - **Layout Switching:** A "Layout" dropdown in the Edit Mode toolbar allows users to instantly swap the layout of the active slide (e.g., TITLE to IMAGE_LEFT). The content is preserved and re-adapted to the new structural skeleton.
 - **Single Slide Regeneration:** A floating toolbar in the editor allows users to regenerate the active slide with a custom AI prompt, leveraging the `refineSlide` service for targeted updates.
@@ -76,3 +78,4 @@ The `RichTextEditor` uses browser-native `contentEditable` for rich formatting.
 1. **No `dangerouslySetInnerHTML`**: Manage `innerHTML` manually through `editorRef`.
 2. **Sync Control**: Only update `innerHTML` from props if the editor is **NOT** focused.
 3. **Selection Recovery**: Save and restore range in between formatting commands.
+4. **ReadOnly State**: When `readOnly` is true, formatting is disabled and `contentEditable` is set to false to provide a clean non-interactive view for presentation and export.
