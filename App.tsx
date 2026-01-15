@@ -1383,7 +1383,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
       console.error(`Audio fetch failed for slide ${slide.id}`, e);
       return null;
     }
-  }, [getAudioContext, presentation.defaultVoiceName]);
+  }, [getAudioContext, presentation]);
 
   const prefetchNext = useCallback(async (currentIndex: number) => {
     const nextIdx = currentIndex + 1;
@@ -1391,7 +1391,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
       const nextSlide = presentation.slides[nextIdx];
       await fetchAudioBuffer(nextSlide);
     }
-  }, [presentation.slides, fetchAudioBuffer]);
+  }, [presentation, fetchAudioBuffer]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'ArrowRight' || e.key === ' ') {
@@ -1476,7 +1476,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
 
     runPlayback();
     return () => stopAutoPlaySession();
-  }, [index, isAutoPlaying, presentation.slides, stopAutoPlaySession, fetchAudioBuffer, getAudioContext, prefetchNext]);
+  }, [index, isAutoPlaying, presentation, stopAutoPlaySession, fetchAudioBuffer, getAudioContext, prefetchNext]);
 
   const currentSlide = presentation.slides[index];
 

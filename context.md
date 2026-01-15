@@ -15,9 +15,9 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Now includes **Instant Voice Previews** via background pre-fetching and M/F indicators (M for Puck/Charon/Fenrir, F for Kore/Zephyr) in the Voice Narration Settings modal.
+- `App.tsx`: The main orchestrator. Includes logic for **Instant Voice Previews**, gender indicators (M/F), and a fixed dependency tracking system in `PresenterView` to ensure slide-level voice overrides are respected.
 - `EditorView`: Manages presentation state and editing. Implements a `previewCacheRef` and background pre-fetching logic to ensure voice samples play instantly when triggered.
-- `PresenterView`: A specialized view for presenters. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides, now with support for per-slide voice overrides.
+- `PresenterView`: A specialized view for presenters. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides. Features improved dependency tracking for the entire `presentation` object to ensure voice overrides are always up-to-date.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** and **Image Resizing**.
 - `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement.
 - `types.ts`: Schema definitions for `FloatingElement`, `Slide`, and `Presentation`.
