@@ -16,7 +16,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ## 2. File Tree & Roles
 - `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header.
-- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** that smoothly grows to `max-w-4xl` when input length ≥ 33 characters and focused.
+- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** that smoothly grows to full width (`max-w-full`), hiding side elements (logo, demo button, action menu) when input length ≥ 33 characters and focused.
 - `PresenterView`: A specialized view for presenters with slide previews and speaker notes.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor`.
 - `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation.
@@ -26,7 +26,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ### UI/UX: Prompt Field Expansion
 - **Mechanism:** Monitors `prompt.length` and focus state via `isPromptFocused`.
-- **Expansion Logic:** If `length >= 33` and field is focused, the prompt container expands from `max-w-2xl` to `max-w-4xl`.
+- **Expansion Logic:** If `length >= 33` and field is focused, the prompt container expands to `max-w-full` while siblings (Logo, Demo, Actions) shrink to `max-w-0` and fade out.
 - **Animation:** Uses Tailwind's `transition-all duration-300 ease-out` for a smooth, fast animated transition.
 
 ### Presenter Mode (Fullscreen)

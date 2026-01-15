@@ -97,6 +97,7 @@ const EditorView: React.FC = () => {
   const [savedLibrary, setSavedLibrary] = useState<SavedPresentationMeta[]>([]);
   const [isFullscreenPresenting, setIsFullscreenPresenting] = useState(false);
   
+  const isExpanded = isPromptFocused && prompt.length >= 33;
   const exportContainerRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
@@ -675,7 +676,7 @@ const EditorView: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 overflow-hidden h-screen">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-50 shrink-0">
-        <div className="flex items-center space-x-2">
+        <div className={`flex items-center space-x-2 transition-all duration-300 ease-out ${isExpanded ? 'max-w-0 opacity-0 pointer-events-none overflow-hidden' : 'max-w-xs'}`}>
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
@@ -686,7 +687,7 @@ const EditorView: React.FC = () => {
           </h1>
         </div>
 
-        <div className={`flex-1 px-8 flex items-center space-x-2 transition-all duration-300 ease-out ${(isPromptFocused && prompt.length >= 33) ? 'max-w-4xl' : 'max-w-2xl'}`}>
+        <div className={`flex-1 px-8 flex items-center space-x-2 transition-all duration-300 ease-out ${isExpanded ? 'max-w-full' : 'max-w-2xl'}`}>
           <div className="relative flex-1 group flex items-end">
             <textarea
               ref={promptRef}
@@ -715,7 +716,7 @@ const EditorView: React.FC = () => {
           </div>
           <button 
             onClick={handleLoadDemo}
-            className="flex items-center space-x-2 px-4 py-2 border border-indigo-200 text-indigo-600 bg-indigo-50/50 hover:bg-indigo-100 rounded-full text-sm font-semibold transition-all shadow-sm shrink-0"
+            className={`flex items-center space-x-2 px-4 py-2 border border-indigo-200 text-indigo-600 bg-indigo-50/50 hover:bg-indigo-100 rounded-full text-sm font-semibold transition-all shadow-sm shrink-0 ${isExpanded ? 'max-w-0 opacity-0 pointer-events-none overflow-hidden p-0 border-0' : 'max-w-xs'}`}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
@@ -724,7 +725,7 @@ const EditorView: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className={`flex items-center space-x-3 transition-all duration-300 ease-out ${isExpanded ? 'max-w-0 opacity-0 pointer-events-none overflow-hidden' : 'max-w-md'}`}>
            <button 
             onClick={openLoadModal}
             className="flex items-center space-x-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors shadow-sm"
