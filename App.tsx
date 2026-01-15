@@ -95,24 +95,24 @@ const TooltipButton: React.FC<{
   title: string;
   children: React.ReactNode;
   className?: string;
-}> = ({ onClick, title, children, className }) => {
-  const [show, setShow] = useState(false);
+}> = ({ onClick, title, children }) => {
+  const [isHovered, setIsHovered] = useState(false);
   return (
-    <div className="relative flex flex-col items-center">
-      <button
-        onClick={onClick}
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        className={className || "p-2 text-slate-400 hover:text-indigo-600 transition-colors"}
-      >
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`flex items-center h-10 px-2 rounded-xl transition-all duration-300 ease-out group ${isHovered ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-50'}`}
+    >
+      <div className="shrink-0 flex items-center justify-center w-6 h-6">
         {children}
-      </button>
-      {show && (
-        <div className="absolute top-full mt-2 px-2 py-1 bg-slate-800 text-white text-[10px] font-bold rounded shadow-lg whitespace-nowrap z-[100] animate-in fade-in zoom-in-95 duration-150">
+      </div>
+      <div className={`overflow-hidden transition-all duration-300 ease-out flex items-center ${isHovered ? 'max-w-40 ml-2 opacity-100' : 'max-w-0 ml-0 opacity-0'}`}>
+        <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
           {title}
-        </div>
-      )}
-    </div>
+        </span>
+      </div>
+    </button>
   );
 };
 
@@ -455,14 +455,15 @@ const EditorView: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 overflow-hidden h-screen">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-50 shrink-0 shadow-sm">
-        <div className={`flex items-center space-x-2 transition-all ${isExpanded ? 'max-w-0 opacity-0 overflow-hidden' : 'max-w-xs'}`}>
+        {/* Fixed-width logo container to stabilize center */}
+        <div className={`flex items-center space-x-2 transition-all duration-300 shrink-0 ${isExpanded ? 'w-0 opacity-0 overflow-hidden' : 'w-60'}`}>
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
           </div>
           <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">Presentify</h1>
         </div>
 
-        <div className={`flex-1 px-8 flex items-center space-x-2 transition-all ${isExpanded ? 'max-w-full' : 'max-w-2xl'}`}>
+        <div className={`flex-1 px-8 flex items-center justify-center transition-all duration-300 ${isExpanded ? 'max-w-full' : 'max-w-2xl'}`}>
           <div className="relative flex-1 group flex items-end">
             <textarea
               ref={promptRef}
@@ -494,33 +495,34 @@ const EditorView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        {/* Fixed-width button container to prevent layout shifts during inline label animation */}
+        <div className="flex items-center justify-end space-x-1 w-[320px] shrink-0">
           <TooltipButton
             onClick={handleLoadDemo}
             title="Load Demo"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </TooltipButton>
 
           <TooltipButton 
             onClick={() => { setSavedLibrary(getLibrary()); setShowOpenModal(true); }} 
-            title="Open Presentation"
+            title="Open"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" strokeWidth={2}/></svg>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" strokeWidth={2}/></svg>
           </TooltipButton>
           
           {presentation && (
             <>
               <TooltipButton 
                 onClick={() => { setSaveName(presentation.title); setShowSaveModal(true); }} 
-                title="Save to Library"
+                title="Save"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" strokeWidth={2}/></svg>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" strokeWidth={2}/></svg>
               </TooltipButton>
               
-              <div className="relative export-menu-container flex flex-col items-center">
-                <TooltipButton onClick={() => setShowExportMenu(!showExportMenu)} title="Export Slides">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
+              <div className="relative export-menu-container flex items-center">
+                <TooltipButton onClick={() => setShowExportMenu(!showExportMenu)} title="Export">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
                 </TooltipButton>
                 {showExportMenu && (
                   <div className="absolute top-full right-0 mt-2 w-48 bg-white border rounded-xl shadow-2xl z-[100] p-1.5">
@@ -530,7 +532,7 @@ const EditorView: React.FC = () => {
                 )}
               </div>
 
-              <button onClick={openPresenterMode} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center space-x-2 ml-2">
+              <button onClick={openPresenterMode} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center space-x-2 ml-1">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeWidth={2}/></svg>
                 <span>Present</span>
               </button>
@@ -711,6 +713,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Topic</label>
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl p-6 text-lg outline-none focus:ring-2 focus:ring-indigo-100 h-32 resize-none" placeholder="What should this presentation be about?" />
           </section>
+          
           <div className="grid grid-cols-2 gap-10">
             <section className="space-y-6">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Source Grounding</label>
@@ -746,6 +749,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                 </div>
               </div>
             </section>
+            
             <section className="space-y-6">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Structure</label>
               <div className="space-y-4 mb-4">
@@ -774,37 +778,40 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                 )}
                 <p className="text-[10px] font-black text-indigo-500 uppercase">Final slides to generate: {slideCount}</p>
               </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Slide Focus (Rearrange with drag)</label>
-                  <button onClick={addTopic} className="text-indigo-600 text-[10px] font-black uppercase hover:underline">Add New</button>
-                </div>
-                <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                  {topics.map((t: any, index: number) => (
-                    <div 
-                      key={t.id} 
-                      draggable 
-                      onDragStart={() => handleDragStart(index)}
-                      onDragEnter={() => handleDragEnter(index)}
-                      onDragEnd={handleDragEnd}
-                      onDragOver={(e) => e.preventDefault()}
-                      className="bg-slate-50 p-4 rounded-2xl space-y-2 relative group cursor-move border-2 border-transparent hover:border-indigo-100 hover:bg-indigo-50/30 active:opacity-50 transition-all"
-                    >
-                      <button onClick={() => removeTopic(t.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400">×</button>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-[10px] font-black text-indigo-400 bg-white w-5 h-5 flex items-center justify-center rounded-full shadow-sm">{index + 1}</span>
-                        <input type="text" value={t.title} onChange={(e) => updateTopic(t.id, 'title', e.target.value)} placeholder="Title Focus" className="flex-1 bg-transparent border-none text-xs font-bold p-0 outline-none" />
-                      </div>
-                      <input type="text" value={t.detail} onChange={(e) => updateTopic(t.id, 'detail', e.target.value)} placeholder="Details..." className="w-full bg-transparent border-none text-[10px] p-0 outline-none text-slate-500 ml-7" />
-                    </div>
-                  ))}
-                  {topics.length === 0 && <p className="text-[10px] text-slate-300 text-center py-4 italic">No custom slide focus defined. The AI will determine the best structure.</p>}
-                </div>
-              </div>
             </section>
           </div>
+
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Slide Focus (Rearrange with drag)</label>
+              <button onClick={addTopic} className="text-indigo-600 text-[10px] font-black uppercase hover:underline">Add New Slide focus</button>
+            </div>
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              {topics.map((t: any, index: number) => (
+                <div 
+                  key={t.id} 
+                  draggable 
+                  onDragStart={() => handleDragStart(index)}
+                  onDragEnter={() => handleDragEnter(index)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => e.preventDefault()}
+                  className="bg-slate-50 p-4 rounded-2xl space-y-2 relative group cursor-move border-2 border-transparent hover:border-indigo-100 hover:bg-indigo-50/30 active:opacity-50 transition-all"
+                >
+                  <button onClick={() => removeTopic(t.id)} className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400">×</button>
+                  <div className="flex items-center space-x-4">
+                    <span className="text-[10px] font-black text-indigo-400 bg-white w-6 h-6 flex items-center justify-center rounded-full shadow-sm shrink-0">{index + 1}</span>
+                    <div className="flex-1 space-y-1">
+                      <input type="text" value={t.title} onChange={(e) => updateTopic(t.id, 'title', e.target.value)} placeholder="Title Focus" className="w-full bg-transparent border-none text-sm font-bold p-0 outline-none" />
+                      <input type="text" value={t.detail} onChange={(e) => updateTopic(t.id, 'detail', e.target.value)} placeholder="Add details or context for this slide..." className="w-full bg-transparent border-none text-xs p-0 outline-none text-slate-500" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {topics.length === 0 && <p className="text-[10px] text-slate-300 text-center py-8 italic border-2 border-dashed border-slate-100 rounded-2xl">No custom slide focus defined. The AI will determine the best structure based on your topic and sources.</p>}
+            </div>
+          </section>
         </div>
+        
         <div className="p-8 border-t bg-slate-50 flex justify-end space-x-4">
           <button onClick={onClose} className="px-6 py-3 text-slate-400 font-bold">Cancel</button>
           <button onClick={onSubmit} className="bg-indigo-600 text-white px-10 py-3 rounded-2xl font-black shadow-xl shadow-indigo-100">Create Presentation</button>

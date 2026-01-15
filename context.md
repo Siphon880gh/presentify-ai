@@ -25,15 +25,16 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 ## 3. Architecture & Code Flow
 
 ### UI/UX: Prompt Field & Wizard
+- **Layout Stability:** The header uses fixed-width side containers for the logo (left) and button group (right) to prevent the center prompt from shifting horizontally when buttons animate their inline labels.
 - **Prompt Field:** Monitors `prompt.length` and focus state via `isPromptFocused`. Expands to `max-w-full` when focused with ≥ 33 chars.
 - **Split Button:** The "Create" button features a split dropdown chevron.
-- **Tooltips:** Header icon-only buttons use a custom `TooltipButton` component to display descriptive text on hover for better user onboarding.
+- **Inline Button Labels:** Header icon buttons use a custom `TooltipButton` that expands horizontally on hover to reveal descriptive text labels with a smooth animation.
 - **Prompt Wizard:** A comprehensive modal allowing users to:
   - Input a detailed multiline context.
   - **Slide Count Selection:** Choose between "Exact Count" (3-25 slider) and "Quick Pick" qualitative options (Few=5, Moderate=10, Many=15, Numerous=20).
   - **Source Grounding:** Upload documents (PDF, DOCX, CSV, TXT, **Markdown .md**, Images) or provide web URLs.
   - **URL Management:** A visible list of added URLs is displayed, allowing users to verify and remove specific links before generation.
-  - **Upload Feedback:** Lists supported types and provides inline error messages for unsupported file formats.
+  - **Structural Focus Row:** The "Slide Focus" reordering section takes up a full row at the bottom of the modal, providing more space for defining complex slide sequences.
   - **Structural Drag-and-Drop:** Rearrange slide topics using native drag-and-drop to define the generation sequence.
   - Sync prompt text between header and wizard automatically.
   - Reset wizard state to clear custom structure and sources.
