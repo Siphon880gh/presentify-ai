@@ -28,7 +28,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ### UI/UX: Generation & Refinement
 - **Global Refinement Mode:** Users can refine an entire presentation instead of starting over.
-- **Toggle Mechanism:** An "Edit Mode" button in the header activates specialized editing tools.
+- **Toggle Mechanism:** An "Edit Mode" button in the header activates specialized editing tools (only visible when a slideshow is active).
 - **Voice Editing Modal:** A dedicated modal allows users to manage narration voices.
   - **Global Voice:** Apply a single voice to the entire presentation.
   - **Slide Overrides:** Assign specific voices (Puck, Charon, Kore, Fenrir, Zephyr) to individual slides.
