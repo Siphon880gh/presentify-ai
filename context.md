@@ -31,14 +31,18 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Inline Button Labels:** Header icon buttons use a custom `TooltipButton` that expands horizontally on hover to reveal descriptive text labels with a smooth animation.
 - **Prompt Wizard:** A comprehensive modal allowing users to choose between exact/approximate counts, grounding files, and custom slide structures.
 
-### Presenter Mode & Auto-Play (Refined)
+### Presenter Mode & Auto-Play (High Performance)
 - **Mechanism:** Uses the browser's Fullscreen API.
 - **Auto-Play Logic:** A toggle in the HUD activates an automated narration sequence.
-  - **With Notes:** Uses `gemini-2.5-flash-preview-tts` to generate narration. Implements a `lastGenerationIdRef` mechanism to prevent overlapping audio from stale asynchronous calls. Slides advance automatically when the current audio finishes playing.
+  - **With Notes:** Uses `gemini-2.5-flash-preview-tts` to generate narration.
+  - **Audio Caching:** Implements a slide-id-based caching mechanism (`audioCacheRef`). Entries are invalidated if the corresponding notes are edited.
+  - **Prefetching:** Automatically generates and caches the audio for the *next* slide while the *current* slide is playing, ensuring instant transitions.
+  - **Notes Sync:** The HUD's speaker notes container auto-scrolls in real-time based on the current audio playback percentage (`progress = currentTime / duration`).
   - **Without Notes:** Slides advance automatically after a **10-second** fallback pause.
+  - **Error Handling:** Displays an auto-dismissing toast if audio generation fails, falling back to a standard 10-second timer.
   - **Manual Intervention:** Arrow keys or manual navigation buttons automatically disable Auto-Play mode to return control to the user.
 - **Audio Processing:** Implements a raw PCM decoder for Gemini TTS output, ensuring high-fidelity voice playback within an `AudioContext`.
-- **Loading State:** The HUD button displays a "Thinking..." state while awaiting the TTS API response. The button remains clickable to allow users to toggle off Auto-Play even while a generation is pending.
+- **Loading State:** The HUD button displays a "Preloading..." state while awaiting the TTS API response. The button remains clickable to allow users to toggle off Auto-Play even while a generation is pending.
 
 ### Grounded Content Generation
 - Files are parsed on the client (PDF, DOCX via libraries; CSV, TXT, MD via native APIs).

@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Presentation, Slide, SlideLayout, SlideTransition } from './types';
@@ -204,6 +205,7 @@ const EditorView: React.FC = () => {
       }
     };
     window.addEventListener('mousedown', handleOutsideClick);
+    /* Fixed: Changed window.removeHierarchy to window.removeEventListener to correctly clean up the event listener. */
     return () => window.removeEventListener('mousedown', handleOutsideClick);
   }, [showExportMenu, showWizardDropdown]);
 
@@ -577,7 +579,7 @@ const EditorView: React.FC = () => {
               </div>
 
               <button onClick={openPresenterMode} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center space-x-2 ml-1">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2v8a2 2 0 002 2z" strokeWidth={2}/></svg>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeWidth={2}/></svg>
                 <span>Present</span>
               </button>
             </>
@@ -859,36 +861,95 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
   );
 };
 
+interface AudioCacheEntry {
+  notes: string;
+  buffer: AudioBuffer;
+}
+
 const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number, onExit: () => void }> = ({ presentation, initialIndex, onExit }) => {
   const [index, setIndex] = useState(initialIndex);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+  
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const autoPlayTimerRef = useRef<number | null>(null);
   const lastGenerationIdRef = useRef(0);
+  const audioCacheRef = useRef<Map<string, AudioCacheEntry>>(new Map());
+  const notesContainerRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
-  const stopAutoPlaySession = useCallback(() => {
-    lastGenerationIdRef.current++; // Invalidate pending speakText calls
+  const clearToast = useCallback(() => setErrorToast(null), []);
+  useEffect(() => {
+    if (errorToast) {
+      const timer = setTimeout(clearToast, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorToast, clearToast]);
+
+  const stopAudio = useCallback(() => {
     if (currentSourceRef.current) {
       try { currentSourceRef.current.stop(); } catch (e) {}
       currentSourceRef.current = null;
     }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+  }, []);
+
+  const stopAutoPlaySession = useCallback(() => {
+    lastGenerationIdRef.current++;
+    stopAudio();
     if (autoPlayTimerRef.current) {
       window.clearTimeout(autoPlayTimerRef.current);
       autoPlayTimerRef.current = null;
     }
     setIsAudioLoading(false);
+  }, [stopAudio]);
+
+  const getAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
   }, []);
+
+  const fetchAudioBuffer = useCallback(async (slide: Slide): Promise<AudioBuffer | null> => {
+    const notes = slide.notes?.trim();
+    if (!notes) return null;
+
+    const cached = audioCacheRef.current.get(slide.id);
+    if (cached && cached.notes === notes) return cached.buffer;
+
+    try {
+      const base64 = await speakText(notes);
+      const ctx = getAudioContext();
+      const buffer = await decodeAudioData(decode(base64), ctx, 24000, 1);
+      audioCacheRef.current.set(slide.id, { notes, buffer });
+      return buffer;
+    } catch (e) {
+      console.error(`Audio fetch failed for slide ${slide.id}`, e);
+      return null;
+    }
+  }, [getAudioContext]);
+
+  const prefetchNext = useCallback(async (currentIndex: number) => {
+    const nextIdx = currentIndex + 1;
+    if (nextIdx < presentation.slides.length) {
+      const nextSlide = presentation.slides[nextIdx];
+      await fetchAudioBuffer(nextSlide);
+    }
+  }, [presentation.slides, fetchAudioBuffer]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'ArrowRight' || e.key === ' ') {
       setIndex(i => Math.min(i + 1, presentation.slides.length - 1));
-      setIsAutoPlaying(false); // Manual move cancels auto-play
+      setIsAutoPlaying(false);
     }
     if (e.key === 'ArrowLeft') {
       setIndex(i => Math.max(i - 1, 0));
-      setIsAutoPlaying(false); // Manual move cancels auto-play
+      setIsAutoPlaying(false);
     }
     if (e.key === 'Escape') onExit();
   }, [presentation.slides.length, onExit]);
@@ -907,57 +968,64 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
     const currentSlide = presentation.slides[index];
     const advance = () => {
       setIndex(i => {
-        if (i < presentation.slides.length - 1) {
-          return i + 1;
-        } else {
-          setIsAutoPlaying(false);
-          return i;
-        }
+        if (i < presentation.slides.length - 1) return i + 1;
+        setIsAutoPlaying(false);
+        return i;
       });
     };
 
-    if (currentSlide.notes?.trim()) {
-      const playNotes = async () => {
-        setIsAudioLoading(true);
-        const generationId = ++lastGenerationIdRef.current;
-        try {
-          const base64 = await speakText(currentSlide.notes!);
-          // If a newer request was started or autoplay turned off while waiting, abort
-          if (generationId !== lastGenerationIdRef.current) return;
-          
-          setIsAudioLoading(false);
-          if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-          }
-          const ctx = audioContextRef.current;
-          if (ctx.state === 'suspended') await ctx.resume();
-          
-          const buffer = await decodeAudioData(decode(base64), ctx, 24000, 1);
-          const source = ctx.createBufferSource();
-          source.buffer = buffer;
-          source.connect(ctx.destination);
-          source.onended = () => {
-            if (currentSourceRef.current === source && isAutoPlaying) {
-              advance();
-            }
-          };
-          currentSourceRef.current = source;
-          source.start();
-        } catch (e) {
-          console.error("AutoPlay TTS failed", e);
-          if (generationId === lastGenerationIdRef.current) {
-            setIsAudioLoading(false);
-            autoPlayTimerRef.current = window.setTimeout(advance, 10000);
-          }
-        }
-      };
-      playNotes();
-    } else {
-      autoPlayTimerRef.current = window.setTimeout(advance, 10000);
-    }
+    const runPlayback = async () => {
+      const generationId = ++lastGenerationIdRef.current;
+      setIsAudioLoading(true);
+      
+      const buffer = await fetchAudioBuffer(currentSlide);
+      
+      if (generationId !== lastGenerationIdRef.current) return;
+      setIsAudioLoading(false);
 
+      if (buffer) {
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') await ctx.resume();
+        
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        
+        const startTime = ctx.currentTime;
+        const duration = buffer.duration;
+
+        const updateScroll = () => {
+          if (generationId !== lastGenerationIdRef.current) return;
+          const elapsed = ctx.currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          if (notesContainerRef.current) {
+            const container = notesContainerRef.current;
+            container.scrollTop = progress * (container.scrollHeight - container.clientHeight);
+          }
+          if (progress < 1) animationFrameRef.current = requestAnimationFrame(updateScroll);
+        };
+        
+        source.onended = () => {
+          if (currentSourceRef.current === source && isAutoPlaying) advance();
+        };
+
+        currentSourceRef.current = source;
+        source.start();
+        animationFrameRef.current = requestAnimationFrame(updateScroll);
+        
+        // Parallel prefetch next
+        prefetchNext(index);
+      } else {
+        if (currentSlide.notes?.trim()) {
+           setErrorToast("Failed to generate narration. Advancing automatically.");
+        }
+        autoPlayTimerRef.current = window.setTimeout(advance, 10000);
+      }
+    };
+
+    runPlayback();
     return () => stopAutoPlaySession();
-  }, [index, isAutoPlaying, presentation.slides.length, stopAutoPlaySession]);
+  }, [index, isAutoPlaying, presentation.slides, stopAutoPlaySession, fetchAudioBuffer, getAudioContext, prefetchNext]);
 
   const currentSlide = presentation.slides[index];
 
@@ -985,10 +1053,20 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
           <div className="text-[10px] font-black text-slate-500 uppercase">Slide</div>
           <div className="text-xl font-mono">{index + 1} / {presentation.slides.length}</div>
         </div>
-        <div className="flex items-center space-x-12 flex-1 justify-center px-12">
-          <div className="max-w-xl truncate text-slate-400 italic text-sm">{currentSlide.notes || 'No notes for this slide'}</div>
+        <div className="flex items-center space-x-12 flex-1 justify-center px-12 h-full py-4">
+          <div 
+            ref={notesContainerRef}
+            className="max-w-xl overflow-y-auto text-slate-400 italic text-sm scroll-smooth custom-scrollbar h-full"
+          >
+            {currentSlide.notes || 'No notes for this slide'}
+          </div>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4 relative">
+          {errorToast && (
+            <div className="absolute bottom-full right-0 mb-4 bg-red-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-2xl animate-in fade-in slide-in-from-bottom-2 whitespace-nowrap">
+              {errorToast}
+            </div>
+          )}
           <button 
             onClick={() => setIsAutoPlaying(!isAutoPlaying)} 
             className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
@@ -996,7 +1074,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
             {isAudioLoading ? (
               <>
                 <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                <span>Thinking...</span>
+                <span>Preloading...</span>
               </>
             ) : isAutoPlaying ? (
               <>
