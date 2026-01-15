@@ -15,38 +15,29 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Exporting Libraries:** `jspdf` (PDF generation), `html2canvas` (DOM capturing), `pptxgenjs` (PowerPoint generation)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header for complex topics.
-- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, export logic, and speaker notes editing.
-- `PresenterView`: A specialized view for presenters that displays the current slide, next slide preview, speaker notes, and a session timer.
+- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header.
+- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** that smoothly grows to `max-w-4xl` when input length ≥ 33 characters and focused.
+- `PresenterView`: A specialized view for presenters with slide previews and speaker notes.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor`.
-- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation including speaker notes.
-- `types.ts`: Defines `SlideLayout`, `SlideTransition`, and the `Presentation` schema (including `notes`).
+- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation.
+- `types.ts`: Schema definitions for the application.
 
 ## 3. Architecture & Code Flow
 
+### UI/UX: Prompt Field Expansion
+- **Mechanism:** Monitors `prompt.length` and focus state via `isPromptFocused`.
+- **Expansion Logic:** If `length >= 33` and field is focused, the prompt container expands from `max-w-2xl` to `max-w-4xl`.
+- **Animation:** Uses Tailwind's `transition-all duration-300 ease-out` for a smooth, fast animated transition.
+
 ### Presenter Mode (Fullscreen)
-- **Mechanism:** Uses the browser's Fullscreen API (`document.documentElement.requestFullscreen()`) to display slides in fullscreen mode within the same window.
-- **Flow:** Clicking "Present" requests fullscreen and renders a minimal slide view with hidden controls. Controls (prev/next, slide counter, exit) appear on hover at the bottom of the screen.
-- **Navigation:** Arrow keys (Left/Right), Space, PageUp/PageDown for slide navigation. Escape exits fullscreen.
-- **State Sync:** The `PresenterView` route (`#/present`) still exists for external window use if needed, using `localStorage` for sync.
+- **Mechanism:** Uses the browser's Fullscreen API. Controls appear on hover at the bottom.
+- **State Sync:** Uses `localStorage` and `storage` events to keep current slide and notes synchronized between editor and presenter windows.
 
 ### localStorage Schema
-The app uses a multi-key storage strategy to avoid quota limitations from large base64 images:
-
-| Key Pattern | Purpose |
-|-------------|---------|
-| `presentify_current` | Active session state (no images) for presenter sync |
-| `presentify_library` | Array of saved presentation metadata (`id`, `title`, `savedAt`, `slideCount`) |
-| `presentify_pres_{id}` | Full presentation data without images |
-| `presentify_img_{presId}_{slideId}` | Individual slide images stored separately |
-
-- **Save:** Opens a modal to name the presentation, then stores presentation data and images in separate keys.
-- **Open:** Displays a list of saved presentations from the library for selection and loading.
-- **Auto-sync:** The current session syncs to `presentify_current` (debounced) for presenter mode, with images stored separately.
-
-### Export Flow
-- **UI:** A split-button menu in the header with format options.
-- **PDF/PPTX:** Captured via off-screen rendering or programmatic mapping of layouts to PowerPoint objects.
+- `presentify_current`: Active session (no images).
+- `presentify_library`: Metadata for all saved presentations.
+- `presentify_pres_{id}`: Presentation content (no images).
+- `presentify_img_{presId}_{slideId}`: Individual slide images.
 
 ---
 
@@ -54,15 +45,7 @@ The app uses a multi-key storage strategy to avoid quota limitations from large 
 
 The `RichTextEditor` uses browser-native `contentEditable` for rich formatting.
 
-## Toolbar Features
-- **Formatting:** Bold, Italic, Underline
-- **Font Size:** 7 sizes (Tiny to Huge)
-- **Lists:** Bullet list, Numbered list
-- **Alignment:** Left, Center, Right
-- **History:** Undo/Redo with keyboard shortcuts
-
-## Strict Rules & Solutions
+## Rules
 1. **No `dangerouslySetInnerHTML`**: Manage `innerHTML` manually through `editorRef`.
-2. **Preventing "Blank Text" on Mount**: Use `useLayoutEffect` to set `innerHTML` synchronously.
-3. **Preventing Cursor Jumps during External Sync**: Only update `innerHTML` if the prop `value` differs AND the editor is **NOT** focused.
-4. **Toolbar Persistence**: Check `relatedTarget` in `onBlur` to keep toolbar open when clicking its buttons.
+2. **Sync Control**: Only update `innerHTML` from props if the editor is **NOT** focused.
+3. **Selection Recovery**: Save and restore range in between formatting commands.

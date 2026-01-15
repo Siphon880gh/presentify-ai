@@ -75,6 +75,7 @@ const saveToLibrary = (meta: SavedPresentationMeta) => {
 
 const EditorView: React.FC = () => {
   const [prompt, setPrompt] = useState('');
+  const [isPromptFocused, setIsPromptFocused] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isImageGenerating, setIsImageGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -685,15 +686,17 @@ const EditorView: React.FC = () => {
           </h1>
         </div>
 
-        <div className="flex-1 max-w-2xl px-8 flex items-center space-x-2">
+        <div className={`flex-1 px-8 flex items-center space-x-2 transition-all duration-300 ease-out ${(isPromptFocused && prompt.length >= 33) ? 'max-w-4xl' : 'max-w-2xl'}`}>
           <div className="relative flex-1 group flex items-end">
             <textarea
               ref={promptRef}
               rows={1}
               placeholder="Enter a new topic for a full slideshow..."
               className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2.5 px-6 pr-24 transition-all outline-none resize-none overflow-hidden"
-              style={{ maxHeight: '34px', minHeight: '34px' }}
+              style={{ minHeight: '34px', maxHeight: '160px' }}
               value={prompt}
+              onFocus={() => setIsPromptFocused(true)}
+              onBlur={() => setIsPromptFocused(false)}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -706,7 +709,6 @@ const EditorView: React.FC = () => {
               onClick={() => handleGenerate(true)}
               disabled={isGenerating}
               className="absolute right-2 bottom-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-full text-sm font-medium transition-colors"
-              style={{ top: '3px' }}
             >
               {isGenerating ? '...' : 'Create'}
             </button>
