@@ -38,7 +38,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
   - **Without Notes:** Slides advance automatically after a **10-second** fallback pause.
   - **Manual Intervention:** Arrow keys or manual navigation buttons automatically disable Auto-Play mode to return control to the user.
 - **Audio Processing:** Implements a raw PCM decoder for Gemini TTS output, ensuring high-fidelity voice playback within an `AudioContext`.
-- **Loading State:** The HUD button displays a "Thinking..." state while awaiting the TTS API response to manage user expectations regarding latency.
+- **Loading State:** The HUD button displays a "Thinking..." state while awaiting the TTS API response. The button remains clickable to allow users to toggle off Auto-Play even while a generation is pending.
 
 ### Grounded Content Generation
 - Files are parsed on the client (PDF, DOCX via libraries; CSV, TXT, MD via native APIs).

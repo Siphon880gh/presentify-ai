@@ -906,11 +906,14 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
 
     const currentSlide = presentation.slides[index];
     const advance = () => {
-      if (index < presentation.slides.length - 1) {
-        setIndex(i => i + 1);
-      } else {
-        setIsAutoPlaying(false);
-      }
+      setIndex(i => {
+        if (i < presentation.slides.length - 1) {
+          return i + 1;
+        } else {
+          setIsAutoPlaying(false);
+          return i;
+        }
+      });
     };
 
     if (currentSlide.notes?.trim()) {
@@ -988,8 +991,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
         <div className="flex items-center space-x-4">
           <button 
             onClick={() => setIsAutoPlaying(!isAutoPlaying)} 
-            disabled={isAudioLoading}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'} ${isAudioLoading ? 'opacity-80 cursor-wait' : ''}`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
           >
             {isAudioLoading ? (
               <>
