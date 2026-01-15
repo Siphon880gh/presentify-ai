@@ -1,4 +1,3 @@
-
 # Presentify AI - Project Context
 
 > [!NOTE]
@@ -13,13 +12,14 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Styling:** Tailwind CSS (via CDN in `index.html`)
 - **AI Integration:** `@google/genai` (Gemini 3 Flash for text, Gemini 2.5 Flash for images)
 - **Exporting Libraries:** `jspdf` (PDF generation), `html2canvas` (DOM capturing), `pptxgenjs` (PowerPoint generation)
+- **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header.
-- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure generation.
+- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header and the **Prompt Wizard** with source grounding.
+- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
 - `PresenterView`: A specialized view for presenters with slide previews and speaker notes.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor`.
-- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation.
+- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation with multi-modal context support.
 - `types.ts`: Schema definitions for the application.
 
 ## 3. Architecture & Code Flow
@@ -30,9 +30,16 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Prompt Wizard:** A comprehensive modal allowing users to:
   - Input a detailed multiline context.
   - Choose specific slide counts (3-20).
+  - **Source Grounding:** Upload documents (PDF, DOCX, CSV, TXT, Images) or provide web URLs to be used as primary context for content generation.
   - Define an ordered list of topics with specific sub-details for each slide.
   - Sync prompt text between header and wizard automatically.
-  - Reset wizard state to clear custom structure.
+  - Reset wizard state to clear custom structure and sources.
+
+### Grounded Content Generation
+- Files are parsed on the client (PDF, DOCX via libraries; CSV, TXT via native APIs).
+- Images are converted to base64 and sent as multi-modal parts to Gemini.
+- URL contents are fetched (subject to CORS) and extracted for text context.
+- Gemini 3 Flash receives all source material as `parts` in the generation request, prioritizing it for factual accuracy.
 
 ### Presenter Mode (Fullscreen)
 - **Mechanism:** Uses the browser's Fullscreen API. Controls appear on hover at the bottom.

@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { SlideLayout, Slide, SlideTransition } from "../types";
 
@@ -24,10 +23,40 @@ export const generateImage = async (prompt: string): Promise<string> => {
   throw new Error("No image data returned from API");
 };
 
-export const generatePresentation = async (prompt: string): Promise<any> => {
+export const generatePresentation = async (
+  prompt: string, 
+  context?: { text: string[], images: {data: string, mimeType: string}[] }
+): Promise<any> => {
+  const contextParts: any[] = [];
+  
+  let userPrompt = `Create a professional 7-10 slide presentation about: ${prompt}. Each slide should have a distinct layout, an appropriate transition type (FADE, SLIDE, or ZOOM), and detailed speaker notes to help the presenter.`;
+
+  if (context && (context.text.length > 0 || context.images.length > 0)) {
+    userPrompt += `\n\nCRITICAL: Use the provided primary source material (attached text and images) as the basis for this presentation. Ensure the content is grounded in these facts and visuals.`;
+    
+    // Add text context as a part
+    if (context.text.length > 0) {
+      contextParts.push({ text: `PRIMARY SOURCE DOCUMENTS AND WEB CONTENT:\n${context.text.join('\n\n---\n\n')}` });
+    }
+
+    // Add image context as parts
+    if (context.images.length > 0) {
+      context.images.forEach(img => {
+        contextParts.push({
+          inlineData: {
+            data: img.data.split(',')[1],
+            mimeType: img.mimeType
+          }
+        });
+      });
+    }
+  }
+
+  contextParts.push({ text: userPrompt });
+
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Create a professional 7-10 slide presentation about: ${prompt}. Each slide should have a distinct layout, an appropriate transition type (FADE, SLIDE, or ZOOM), and detailed speaker notes to help the presenter.`,
+    contents: { parts: contextParts },
     config: {
       responseMimeType: "application/json",
       responseSchema: {
