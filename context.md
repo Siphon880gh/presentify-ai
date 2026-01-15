@@ -31,7 +31,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Inline Button Labels:** Header icon buttons use a custom `TooltipButton` that expands horizontally on hover to reveal descriptive text labels with a smooth animation.
 - **Prompt Wizard:** A comprehensive modal allowing users to:
   - Input a detailed multiline context.
-  - **Slide Count Selection:** Choose between "Exact Count" (3-25 slider) and "Quick Pick" qualitative options (Few=5, Moderate=10, Many=15, Numerous=20).
+  - **Slide Count Selection:** Choose between "Exact Count" (3-25 slider) and "Quick Pick" qualitative options (Few=5, Moderate=10, Many=15, Numerous=20). Quick Pick selections instruct the AI to generate an *approximate* number of slides, whereas Exact Count enforces a specific target.
   - **Source Grounding:** Upload documents (PDF, DOCX, CSV, TXT, **Markdown .md**, Images) or provide web URLs.
   - **URL Management:** A visible list of added URLs is displayed, allowing users to verify and remove specific links before generation.
   - **Structural Focus Row:** The "Slide Focus" reordering section takes up a full row at the bottom of the modal, providing more space for defining complex slide sequences.

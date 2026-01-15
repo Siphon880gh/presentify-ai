@@ -29,7 +29,7 @@ export const generatePresentation = async (
 ): Promise<any> => {
   const contextParts: any[] = [];
   
-  let userPrompt = `Create a professional 7-10 slide presentation about: ${prompt}. Each slide should have a distinct layout, an appropriate transition type (FADE, SLIDE, or ZOOM), and detailed speaker notes to help the presenter.`;
+  let userPrompt = `Create a professional presentation about: ${prompt}. Each slide should have a distinct layout, an appropriate transition type (FADE, SLIDE, or ZOOM), and detailed speaker notes to help the presenter.`;
 
   if (context && (context.text.length > 0 || context.images.length > 0)) {
     userPrompt += `\n\nCRITICAL: Use the provided primary source material (attached text and images) as the basis for this presentation. Ensure the content is grounded in these facts and visuals.`;

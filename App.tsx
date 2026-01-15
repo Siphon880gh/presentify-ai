@@ -46,6 +46,13 @@ interface SavedPresentationMeta {
   slideCount: number;
 }
 
+const qualitativeOptions = [
+  { label: 'Few', count: 5 },
+  { label: 'Moderate', count: 10 },
+  { label: 'Many', count: 15 },
+  { label: 'Numerous', count: 20 },
+];
+
 const stripImagesFromPresentation = (pres: Presentation): { presentation: Presentation; images: Record<string, string> } => {
   const images: Record<string, string> = {};
   const slides = pres.slides.map(slide => {
@@ -138,6 +145,7 @@ const EditorView: React.FC = () => {
   // Wizard state
   const [wizardPrompt, setWizardPrompt] = useState('');
   const [wizardSlideCount, setWizardSlideCount] = useState(8);
+  const [wizardSlideMode, setWizardSlideMode] = useState<'exact' | 'qualitative'>('exact');
   const [wizardTopics, setWizardTopics] = useState<WizardTopic[]>([]);
   const [wizardFiles, setWizardFiles] = useState<WizardFile[]>([]);
   const [wizardUrls, setWizardUrls] = useState<string[]>([]);
@@ -342,7 +350,8 @@ const EditorView: React.FC = () => {
   };
 
   const handleWizardSubmit = async () => {
-    let finalPrompt = `Topic: ${wizardPrompt}\nSlide Count: ${wizardSlideCount}\n`;
+    const countQualifier = wizardSlideMode === 'qualitative' ? 'approximately' : 'exactly';
+    let finalPrompt = `Topic: ${wizardPrompt}\nSlide Count: ${countQualifier} ${wizardSlideCount}\n`;
     if (wizardTopics.length > 0) {
       finalPrompt += `Specific Structure:\n`;
       wizardTopics.forEach((t, i) => finalPrompt += `${i + 1}. ${t.title}: ${t.detail}\n`);
@@ -656,6 +665,8 @@ const EditorView: React.FC = () => {
           onSubmit={handleWizardSubmit}
           slideCount={wizardSlideCount}
           setSlideCount={setWizardSlideCount}
+          slideMode={wizardSlideMode}
+          setSlideMode={setWizardSlideMode}
           topics={wizardTopics}
           setTopics={setWizardTopics}
           files={wizardFiles}
@@ -674,8 +685,7 @@ const EditorView: React.FC = () => {
 };
 
 // ... Simplified PromptWizard Component ...
-const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, slideCount, setSlideCount, topics, setTopics, files, setFiles, urls, setUrls, urlInput, setUrlInput, isParsing, onFileUpload, uploadError }) => {
-  const [slideMode, setSlideMode] = useState<'exact' | 'qualitative'>('exact');
+const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, slideCount, setSlideCount, topics, setTopics, files, setFiles, urls, setUrls, urlInput, setUrlInput, isParsing, onFileUpload, uploadError, slideMode, setSlideMode }) => {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -692,13 +702,6 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
       setTopics(copy);
     }
   };
-
-  const qualitativeOptions = [
-    { label: 'Few', count: 5 },
-    { label: 'Moderate', count: 10 },
-    { label: 'Many', count: 15 },
-    { label: 'Numerous', count: 20 },
-  ];
 
   const addTopic = () => setTopics([...topics, { id: Math.random().toString(36).substr(2, 9), title: '', detail: '' }]);
   const updateTopic = (id: string, field: string, val: string) => setTopics(topics.map((t: any) => t.id === id ? { ...t, [field]: val } : t));
@@ -777,7 +780,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                         onClick={() => setSlideCount(opt.count)}
                         className={`p-2 rounded-xl text-xs font-bold border transition-all ${slideCount === opt.count ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                       >
-                        {opt.label} ({opt.count})
+                        {opt.label} (Approx {opt.count})
                       </button>
                     ))}
                   </div>
