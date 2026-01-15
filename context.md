@@ -26,7 +26,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ### UI/UX: Prompt Field & Wizard
 - **Layout Stability:** The header uses fixed-width side containers for the logo (left) and button group (right) to prevent the center prompt from shifting horizontally when buttons animate their inline labels.
-- **Prompt Field:** Monitors `prompt.length` and focus state via `isPromptFocused`. Expands to `max-w-full` when focused with ≥ 33 chars.
+- **Prompt Field:** Monitors `prompt.length` and focus state via `isPromptFocused`. Expands to `max-w-full` when focused with ≥ 33 chars. The height is constrained between **34px and 60px** to stabilize the layout, with auto-scrolling enabled for longer text.
 - **Split Button:** The "Create" button features a split dropdown chevron.
 - **Inline Button Labels:** Header icon buttons use a custom `TooltipButton` that expands horizontally on hover to reveal descriptive text labels with a smooth animation.
 - **Prompt Wizard:** A comprehensive modal allowing users to:

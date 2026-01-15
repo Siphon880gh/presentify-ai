@@ -150,11 +150,14 @@ const EditorView: React.FC = () => {
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize prompt textarea
+  // Auto-resize prompt textarea with constraints
   useEffect(() => {
     if (promptRef.current) {
-      promptRef.current.style.height = 'auto';
-      promptRef.current.style.height = `${promptRef.current.scrollHeight}px`;
+      promptRef.current.style.height = '34px'; // Reset to min to measure correct scrollHeight
+      const scrollHeight = promptRef.current.scrollHeight;
+      const targetHeight = Math.min(Math.max(scrollHeight, 34), 60);
+      promptRef.current.style.height = `${targetHeight}px`;
+      promptRef.current.style.overflowY = scrollHeight > 60 ? 'auto' : 'hidden';
     }
   }, [prompt]);
 
@@ -469,14 +472,17 @@ const EditorView: React.FC = () => {
               ref={promptRef}
               rows={1}
               placeholder="Topic for a new slideshow..."
-              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2 px-6 pr-32 transition-all outline-none resize-none overflow-hidden text-sm"
+              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2 px-6 pr-32 transition-all outline-none resize-none text-sm"
+              style={{ minHeight: '34px', maxHeight: '60px' }}
               value={prompt}
               onFocus={() => setIsPromptFocused(true)}
               onBlur={() => setIsPromptFocused(false)}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleGenerate(true))}
             />
-            <div className="absolute right-1 bottom-1 flex items-center wizard-dropdown-container">
+            <div className="absolute right-1 flex items-center wizard-dropdown-container"
+              style={{ "top":"50%", "transform":"translateY(-50%)"}}
+            >
               <button onClick={() => handleGenerate(true)} disabled={isGenerating} className="h-8 px-4 bg-indigo-600 text-white rounded-l-full text-xs font-bold transition-colors">
                 {isGenerating ? '...' : 'Create'}
               </button>
