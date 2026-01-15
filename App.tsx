@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Presentation, Slide, SlideLayout, SlideTransition } from './types';
 import { generatePresentation, generateImage, refineSlide } from './services/geminiService';
@@ -150,8 +150,8 @@ const EditorView: React.FC = () => {
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize prompt textarea with constraints
-  useEffect(() => {
+  // Auto-resize prompt textarea with constraints - using useLayoutEffect to prevent flicker
+  useLayoutEffect(() => {
     if (promptRef.current) {
       promptRef.current.style.height = '34px'; // Reset to min to measure correct scrollHeight
       const scrollHeight = promptRef.current.scrollHeight;
@@ -459,14 +459,14 @@ const EditorView: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50 overflow-hidden h-screen">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-50 shrink-0 shadow-sm">
         {/* Fixed-width logo container to stabilize center */}
-        <div className={`flex items-center space-x-2 transition-all duration-300 shrink-0 ${isExpanded ? 'w-0 opacity-0 overflow-hidden' : 'w-60'}`}>
+        <div className={`flex items-center space-x-2 transition-all duration-500 ease-in-out shrink-0 ${isExpanded ? 'w-0 opacity-0 overflow-hidden' : 'w-60'}`}>
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
           </div>
           <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">Presentify</h1>
         </div>
 
-        <div className={`flex-1 px-8 flex items-center justify-center transition-all duration-300 ${isExpanded ? 'max-w-full' : 'max-w-2xl'}`}>
+        <div className={`flex-1 px-8 flex items-center justify-center transition-all duration-500 ease-in-out ${isExpanded ? 'max-w-full' : 'max-w-2xl'}`}>
           <div className="relative flex-1 group flex items-end">
             <textarea
               ref={promptRef}
