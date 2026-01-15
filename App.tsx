@@ -265,7 +265,7 @@ const EditorView: React.FC = () => {
     const targetPrompt = overridePrompt || (useHeaderPrompt ? prompt : (presentation?.title || prompt));
     if (!targetPrompt.trim()) return;
     setIsGenerating(true);
-    setStatusMessage('Generating grounded presentation...');
+    setStatusMessage('Generating presentation...');
     
     try {
       const data = await generatePresentation(targetPrompt, context);
