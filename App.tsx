@@ -117,6 +117,7 @@ const EditorView: React.FC = () => {
   const [wizardUrls, setWizardUrls] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [isParsingFiles, setIsParsingFiles] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   
   const isExpanded = isPromptFocused && prompt.length >= 33;
   const exportContainerRef = useRef<HTMLDivElement>(null);
@@ -207,13 +208,25 @@ const EditorView: React.FC = () => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     setIsParsingFiles(true);
+    setUploadError(null);
     const newWizardFiles: WizardFile[] = [];
+
+    const allowedExtensions = ['.pdf', '.docx', '.txt', '.csv', '.md', '.png', '.jpg', '.jpeg'];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const id = Math.random().toString(36).substr(2, 9);
+      const fileNameLower = file.name.toLowerCase();
+      const hasValidExt = allowedExtensions.some(ext => fileNameLower.endsWith(ext));
+      const isImg = file.type.startsWith('image/');
+
+      if (!hasValidExt && !isImg) {
+        setUploadError(`Unsupported format: ${file.name}. Only .md, .txt, .pdf, .docx, .csv, and images are accepted.`);
+        continue;
+      }
+
       try {
-        if (file.type.startsWith('image/')) {
+        if (isImg) {
           const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result as string);
@@ -236,7 +249,7 @@ const EditorView: React.FC = () => {
           const arrayBuffer = await file.arrayBuffer();
           const result = await mammoth.extractRawText({ arrayBuffer });
           newWizardFiles.push({ id, name: file.name, type: file.type, content: result.value, isImage: false, mimeType: file.type });
-        } else if (file.type === 'text/plain' || file.type === 'text/csv') {
+        } else if (file.type === 'text/plain' || file.type === 'text/csv' || fileNameLower.endsWith('.md')) {
           const text = await file.text();
           newWizardFiles.push({ id, name: file.name, type: file.type, content: text, isImage: false, mimeType: file.type });
         }
@@ -614,6 +627,7 @@ const EditorView: React.FC = () => {
           setUrlInput={setUrlInput}
           isParsing={isParsingFiles}
           onFileUpload={handleFileUpload}
+          uploadError={uploadError}
         />
       )}
     </div>
@@ -621,7 +635,32 @@ const EditorView: React.FC = () => {
 };
 
 // ... Simplified PromptWizard Component ...
-const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, slideCount, setSlideCount, topics, setTopics, files, setFiles, urls, setUrls, urlInput, setUrlInput, isParsing, onFileUpload }) => {
+const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, slideCount, setSlideCount, topics, setTopics, files, setFiles, urls, setUrls, urlInput, setUrlInput, isParsing, onFileUpload, uploadError }) => {
+  const [slideMode, setSlideMode] = useState<'exact' | 'qualitative'>('exact');
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+
+  const handleDragStart = (index: number) => { dragItem.current = index; };
+  const handleDragEnter = (index: number) => { dragOverItem.current = index; };
+  const handleDragEnd = () => {
+    if (dragItem.current !== null && dragOverItem.current !== null) {
+      const copy = [...topics];
+      const draggedItemContent = copy[dragItem.current];
+      copy.splice(dragItem.current, 1);
+      copy.splice(dragOverItem.current, 0, draggedItemContent);
+      dragItem.current = null;
+      dragOverItem.current = null;
+      setTopics(copy);
+    }
+  };
+
+  const qualitativeOptions = [
+    { label: 'Few', count: 5 },
+    { label: 'Moderate', count: 10 },
+    { label: 'Many', count: 15 },
+    { label: 'Numerous', count: 20 },
+  ];
+
   const addTopic = () => setTopics([...topics, { id: Math.random().toString(36).substr(2, 9), title: '', detail: '' }]);
   const updateTopic = (id: string, field: string, val: string) => setTopics(topics.map((t: any) => t.id === id ? { ...t, [field]: val } : t));
   const removeTopic = (id: string) => setTopics(topics.filter((t: any) => t.id !== id));
@@ -647,12 +686,15 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-600">Documents</span>
-                  <input type="file" multiple className="hidden" id="wizard-file" onChange={onFileUpload} />
+                  <input type="file" multiple className="hidden" id="wizard-file" onChange={onFileUpload} accept=".pdf,.docx,.txt,.csv,.md,.png,.jpg,.jpeg" />
                   <label htmlFor="wizard-file" className="cursor-pointer text-indigo-600 text-xs font-black">Upload</label>
                 </div>
+                <p className="text-[10px] text-slate-400">Supported: .md, .txt, .pdf, .docx, .csv, images</p>
+                {uploadError && <p className="text-[10px] text-red-500 font-bold bg-red-50 p-2 rounded-lg border border-red-100">{uploadError}</p>}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200 min-h-[100px]">
                   {files.map((f: any) => <div key={f.id} className="text-[10px] bg-white border rounded-lg px-2 py-1 mb-1 truncate flex items-center justify-between">{f.name} <button onClick={() => setFiles(files.filter((file: any) => file.id !== f.id))} className="text-red-400 ml-2">×</button></div>)}
                   {isParsing && <p className="text-[10px] animate-pulse">Parsing...</p>}
+                  {files.length === 0 && !isParsing && <p className="text-[10px] text-slate-300 text-center mt-8">No files uploaded</p>}
                 </div>
                 <div className="flex space-x-2">
                   <input type="text" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://..." className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-2 text-xs outline-none" />
@@ -662,19 +704,59 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
             </section>
             <section className="space-y-6">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Structure</label>
-              <div className="flex items-center space-x-4 mb-4">
-                <span className="text-xs font-bold text-slate-600">Slide Count</span>
-                <input type="number" min="3" max="20" value={slideCount} onChange={(e) => setSlideCount(parseInt(e.target.value))} className="w-16 bg-slate-50 rounded-lg p-2 text-center text-xs font-bold" />
-              </div>
-              <button onClick={addTopic} className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-xs font-black text-slate-400 hover:border-indigo-400 hover:text-indigo-400 transition-all">Add Custom Slide Focus</button>
-              <div className="space-y-3">
-                {topics.map((t: any) => (
-                  <div key={t.id} className="bg-slate-50 p-4 rounded-2xl space-y-2 relative group">
-                    <button onClick={() => removeTopic(t.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400">×</button>
-                    <input type="text" value={t.title} onChange={(e) => updateTopic(t.id, 'title', e.target.value)} placeholder="Title Focus" className="w-full bg-transparent border-none text-xs font-bold p-0 outline-none" />
-                    <input type="text" value={t.detail} onChange={(e) => updateTopic(t.id, 'detail', e.target.value)} placeholder="Details..." className="w-full bg-transparent border-none text-[10px] p-0 outline-none text-slate-500" />
+              <div className="space-y-4 mb-4">
+                <div className="flex items-center space-x-2 p-1 bg-slate-100 rounded-xl w-fit">
+                  <button onClick={() => setSlideMode('exact')} className={`px-4 py-1 text-[10px] font-black uppercase rounded-lg transition-all ${slideMode === 'exact' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Exact Count</button>
+                  <button onClick={() => setSlideMode('qualitative')} className={`px-4 py-1 text-[10px] font-black uppercase rounded-lg transition-all ${slideMode === 'qualitative' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Quick Pick</button>
+                </div>
+                
+                {slideMode === 'exact' ? (
+                  <div className="flex items-center space-x-4">
+                    <input type="range" min="3" max="25" value={slideCount} onChange={(e) => setSlideCount(parseInt(e.target.value))} className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                    <span className="w-16 bg-slate-50 rounded-lg p-2 text-center text-xs font-bold border">Slides: {slideCount}</span>
                   </div>
-                ))}
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {qualitativeOptions.map(opt => (
+                      <button 
+                        key={opt.label} 
+                        onClick={() => setSlideCount(opt.count)}
+                        className={`p-2 rounded-xl text-xs font-bold border transition-all ${slideCount === opt.count ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                      >
+                        {opt.label} ({opt.count})
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] font-black text-indigo-500 uppercase">Final slides to generate: {slideCount}</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Slide Focus (Rearrange with drag)</label>
+                  <button onClick={addTopic} className="text-indigo-600 text-[10px] font-black uppercase hover:underline">Add New</button>
+                </div>
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {topics.map((t: any, index: number) => (
+                    <div 
+                      key={t.id} 
+                      draggable 
+                      onDragStart={() => handleDragStart(index)}
+                      onDragEnter={() => handleDragEnter(index)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => e.preventDefault()}
+                      className="bg-slate-50 p-4 rounded-2xl space-y-2 relative group cursor-move border-2 border-transparent hover:border-indigo-100 hover:bg-indigo-50/30 active:opacity-50 transition-all"
+                    >
+                      <button onClick={() => removeTopic(t.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400">×</button>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[10px] font-black text-indigo-400 bg-white w-5 h-5 flex items-center justify-center rounded-full shadow-sm">{index + 1}</span>
+                        <input type="text" value={t.title} onChange={(e) => updateTopic(t.id, 'title', e.target.value)} placeholder="Title Focus" className="flex-1 bg-transparent border-none text-xs font-bold p-0 outline-none" />
+                      </div>
+                      <input type="text" value={t.detail} onChange={(e) => updateTopic(t.id, 'detail', e.target.value)} placeholder="Details..." className="w-full bg-transparent border-none text-[10px] p-0 outline-none text-slate-500 ml-7" />
+                    </div>
+                  ))}
+                  {topics.length === 0 && <p className="text-[10px] text-slate-300 text-center py-4 italic">No custom slide focus defined. The AI will determine the best structure.</p>}
+                </div>
               </div>
             </section>
           </div>

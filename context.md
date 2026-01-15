@@ -29,14 +29,15 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Split Button:** The "Create" button features a split dropdown chevron.
 - **Prompt Wizard:** A comprehensive modal allowing users to:
   - Input a detailed multiline context.
-  - Choose specific slide counts (3-20).
-  - **Source Grounding:** Upload documents (PDF, DOCX, CSV, TXT, Images) or provide web URLs to be used as primary context for content generation.
-  - Define an ordered list of topics with specific sub-details for each slide.
+  - **Slide Count Selection:** Choose between "Exact Count" (3-25 slider) and "Quick Pick" qualitative options (Few=5, Moderate=10, Many=15, Numerous=20).
+  - **Source Grounding:** Upload documents (PDF, DOCX, CSV, TXT, **Markdown .md**, Images) or provide web URLs.
+  - **Upload Feedback:** Lists supported types and provides inline error messages for unsupported file formats.
+  - **Structural Drag-and-Drop:** Rearrange slide topics using native drag-and-drop to define the generation sequence.
   - Sync prompt text between header and wizard automatically.
   - Reset wizard state to clear custom structure and sources.
 
 ### Grounded Content Generation
-- Files are parsed on the client (PDF, DOCX via libraries; CSV, TXT via native APIs).
+- Files are parsed on the client (PDF, DOCX via libraries; CSV, TXT, MD via native APIs).
 - Images are converted to base64 and sent as multi-modal parts to Gemini.
 - URL contents are fetched (subject to CORS) and extracted for text context.
 - Gemini 3 Flash receives all source material as `parts` in the generation request, prioritizing it for factual accuracy.
