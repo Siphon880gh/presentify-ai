@@ -694,7 +694,7 @@ const EditorView: React.FC = () => {
               rows={1}
               placeholder="Enter a new topic for a full slideshow..."
               className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2.5 px-6 pr-24 transition-all outline-none resize-none overflow-hidden"
-              style={{ minHeight: '34px', maxHeight: '160px' }}
+              style={{ minHeight: '34px', maxHeight: '60px' }}
               value={prompt}
               onFocus={() => setIsPromptFocused(true)}
               onBlur={() => setIsPromptFocused(false)}
@@ -709,7 +709,8 @@ const EditorView: React.FC = () => {
             <button 
               onClick={() => handleGenerate(true)}
               disabled={isGenerating}
-              className="absolute right-2 bottom-1.5 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-full text-sm font-medium transition-colors"
+              className="absolute right-2 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-full text-sm font-medium transition-colors"
+              style={{top: "50%", transform: "translateY(-50%)"}}
             >
               {isGenerating ? '...' : 'Create'}
             </button>
