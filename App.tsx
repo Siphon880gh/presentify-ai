@@ -334,10 +334,46 @@ const EditorView: React.FC = () => {
     if (!presentation) return;
     setShowExportMenu(false);
     const pptx = new (pptxgen as any)();
+    pptx.layout = 'LAYOUT_16x9';
+
     presentation.slides.forEach(slide => {
       const pSlide = pptx.addSlide();
-      pSlide.addText(slide.title.replace(/<[^>]*>/g, ''), { x: 0.5, y: 0.5, w: '90%', fontSize: 32 });
-      pSlide.addText(slide.content.map(c => c.replace(/<[^>]*>/g, '')).join('\n'), { x: 0.5, y: 1.5, w: '90%', fontSize: 18 });
+      const cleanTitle = slide.title.replace(/<[^>]*>/g, '');
+      const cleanSubtitle = slide.subtitle?.replace(/<[^>]*>/g, '') || '';
+      const cleanContent = slide.content.map(c => c.replace(/<[^>]*>/g, '')).join('\n');
+
+      if (slide.layout === SlideLayout.TITLE) {
+        pSlide.addText(cleanTitle, { x: 0, y: '35%', w: '100%', align: 'center', fontSize: 44, bold: true });
+        if (cleanSubtitle) pSlide.addText(cleanSubtitle, { x: 0, y: '50%', w: '100%', align: 'center', fontSize: 24, color: '666666' });
+      } else if (slide.layout === SlideLayout.QUOTE) {
+        pSlide.addText(`"${cleanContent}"`, { x: 1, y: '40%', w: '80%', align: 'center', fontSize: 32, italic: true });
+        pSlide.addText(`— ${cleanTitle}`, { x: 1, y: '60%', w: '80%', align: 'center', fontSize: 24, bold: true });
+      } else {
+        pSlide.addText(cleanTitle, { x: 0.5, y: 0.5, w: '90%', fontSize: 32, bold: true });
+        
+        let contentX = 0.5;
+        let contentW = '90%';
+        
+        if (slide.imageUrl) {
+          const isLeft = slide.layout === SlideLayout.IMAGE_LEFT;
+          const imgConfig: any = { 
+            x: isLeft ? 0.5 : 5.5, 
+            y: 1.5, 
+            w: 4, 
+            h: 3,
+            ...(slide.imageUrl.startsWith('data:') ? { data: slide.imageUrl } : { path: slide.imageUrl })
+          };
+          pSlide.addImage(imgConfig);
+          contentX = isLeft ? 5.0 : 0.5;
+          contentW = '45%';
+        }
+        
+        pSlide.addText(cleanContent, { x: contentX, y: 1.5, w: contentW, fontSize: 18, color: '444444' });
+      }
+      
+      if (slide.notes) {
+        pSlide.addNotes(slide.notes);
+      }
     });
     pptx.writeFile({ fileName: `${presentation.title.substring(0, 30)}.pptx` });
   };
