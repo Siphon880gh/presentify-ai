@@ -15,7 +15,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization. Now includes **Voice Narration Settings** for global and slide-specific voices.
+- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization. Now includes **Voice Narration Settings** with live **Voice Previews**.
 - `EditorView`: Manages presentation state, slide navigation, library management, and **Advanced Edit Mode** toggling. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
 - `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides, now with support for per-slide voice overrides.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images) and **Image Resizing**.
@@ -32,6 +32,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Voice Editing Modal:** A dedicated modal allows users to manage narration voices.
   - **Global Voice:** Apply a single voice to the entire presentation.
   - **Slide Overrides:** Assign specific voices (Puck, Charon, Kore, Fenrir, Zephyr) to individual slides.
+  - **Voice Preview:** Next to each voice selection, a "Play" icon allows users to hear a live sample generated via the Gemini TTS service.
   - **Cache Invalidation:** Changing a voice (globally or per-slide) invalidates the `audioCacheRef` in `PresenterView`, forcing a fresh TTS generation during playback.
 - **Slide Reordering:** HTML5 Drag and Drop support in the slide outline.
 - **Floating Elements:** Independent text and image elements with percentage positioning.

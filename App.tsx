@@ -179,6 +179,9 @@ const EditorView: React.FC = () => {
   const [imageInputUrl, setImageInputUrl] = useState('');
   const [imageAIPrompt, setImageAIPrompt] = useState('');
 
+  // Voice Preview State
+  const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+
   // Drag handles for outline
   const slideDragItem = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -498,6 +501,26 @@ const EditorView: React.FC = () => {
     setShowSaveModal(false);
   };
 
+  const handlePreviewVoice = async (voice: string) => {
+    if (previewingVoice) return;
+    setPreviewingVoice(voice);
+    try {
+      const base64 = await speakText(`Hello, I am ${voice}. This is how I will sound when narrating your presentation.`, voice);
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      const buffer = await decodeAudioData(decode(base64), ctx, 24000, 1);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start();
+      source.onended = () => {
+        setPreviewingVoice(null);
+      };
+    } catch (e) {
+      console.error("Voice preview failed", e);
+      setPreviewingVoice(null);
+    }
+  };
+
   const openPresenterMode = async () => {
     syncToCurrentStorage();
     try {
@@ -737,7 +760,7 @@ const EditorView: React.FC = () => {
               
               <div className="relative export-menu-container flex items-center">
                 <TooltipButton onClick={() => setShowExportMenu(!showExportMenu)} title="Export">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003 3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
                 </TooltipButton>
                 {showExportMenu && (
                   <div className="absolute top-full right-0 mt-2 w-48 bg-white border rounded-xl shadow-2xl z-[100] p-1.5">
@@ -949,15 +972,27 @@ const EditorView: React.FC = () => {
             <div className="space-y-8">
                <div className="space-y-4">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Default Presentation Voice</label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {AVAILABLE_VOICES.map(voice => (
-                      <button 
-                        key={voice}
-                        onClick={() => setPresentation({...presentation, defaultVoiceName: voice})}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${presentation.defaultVoiceName === voice || (!presentation.defaultVoiceName && voice === 'Zephyr') ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                      >
-                        {voice}
-                      </button>
+                      <div key={voice} className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1 pr-2">
+                        <button 
+                          onClick={() => setPresentation({...presentation, defaultVoiceName: voice})}
+                          className={`flex-1 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${presentation.defaultVoiceName === voice || (!presentation.defaultVoiceName && voice === 'Zephyr') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                        >
+                          {voice}
+                        </button>
+                        <button 
+                          onClick={() => handlePreviewVoice(voice)}
+                          disabled={previewingVoice !== null}
+                          className={`ml-1 p-1.5 rounded-lg transition-colors ${previewingVoice === voice ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-600 hover:bg-white'}`}
+                        >
+                          {previewingVoice === voice ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                          )}
+                        </button>
+                      </div>
                     ))}
                   </div>
                   <p className="text-[10px] text-slate-400">This voice will be used for all slides unless overridden.</p>
@@ -970,15 +1005,28 @@ const EditorView: React.FC = () => {
                       <button onClick={() => updateSlide({...activeSlide!, voiceName: undefined})} className="text-[10px] font-bold text-red-500 hover:underline">Clear Override</button>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {AVAILABLE_VOICES.map(voice => (
-                      <button 
-                        key={voice}
-                        onClick={() => updateSlide({...activeSlide!, voiceName: voice})}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${activeSlide?.voiceName === voice ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                      >
-                        {voice}
-                      </button>
+                      <div key={voice} className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1 pr-2">
+                        <button 
+                          key={voice}
+                          onClick={() => updateSlide({...activeSlide!, voiceName: voice})}
+                          className={`flex-1 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeSlide?.voiceName === voice ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                        >
+                          {voice}
+                        </button>
+                        <button 
+                          onClick={() => handlePreviewVoice(voice)}
+                          disabled={previewingVoice !== null}
+                          className={`ml-1 p-1.5 rounded-lg transition-colors ${previewingVoice === voice ? 'text-purple-600' : 'text-slate-400 hover:text-purple-600 hover:bg-white'}`}
+                        >
+                          {previewingVoice === voice ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                          )}
+                        </button>
+                      </div>
                     ))}
                   </div>
                   <p className="text-[10px] text-slate-400">Override the global presentation voice for this specific slide.</p>
