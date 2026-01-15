@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { SlideLayout, Slide, SlideTransition } from "../types";
+import { SlideLayout, Slide, SlideTransition, Presentation } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -25,11 +25,20 @@ export const generateImage = async (prompt: string): Promise<string> => {
 
 export const generatePresentation = async (
   prompt: string, 
-  context?: { text: string[], images: {data: string, mimeType: string}[] }
+  context?: { text: string[], images: {data: string, mimeType: string}[] },
+  existingPresentation?: Presentation
 ): Promise<any> => {
   const contextParts: any[] = [];
   
   let userPrompt = `Create a professional presentation about: ${prompt}. Each slide should have a distinct layout, an appropriate transition type (FADE, SLIDE, or ZOOM), and detailed speaker notes to help the presenter.`;
+
+  if (existingPresentation) {
+    userPrompt += `\n\nREFINEMENT MODE: You are refining an EXISTING presentation titled "${existingPresentation.title}". 
+    The current structure of the presentation is:
+    ${existingPresentation.slides.map((s, i) => `Slide ${i + 1}: "${s.title}" (Content: ${s.content.join('; ')})`).join('\n')}
+    
+    INSTRUCTION: Update, reorder, or expand this presentation based on the new prompt: "${prompt}". You can add new slides, reorder them, or update existing content while preserving valuable information from the original.`;
+  }
 
   if (context && (context.text.length > 0 || context.images.length > 0)) {
     userPrompt += `\n\nCRITICAL: Use the provided primary source material (attached text and images) as the basis for this presentation. Ensure the content is grounded in these facts and visuals.`;

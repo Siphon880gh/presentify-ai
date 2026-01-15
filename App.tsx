@@ -171,6 +171,7 @@ const EditorView: React.FC = () => {
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [regenPrompt, setRegenPrompt] = useState('');
   const [isRefinement, setIsRefinement] = useState(false);
+  const [isGlobalRefine, setIsGlobalRefine] = useState(false);
   const [showImageAddModal, setShowImageAddModal] = useState(false);
   const [imageInputUrl, setImageInputUrl] = useState('');
   const [imageAIPrompt, setImageAIPrompt] = useState('');
@@ -338,14 +339,23 @@ const EditorView: React.FC = () => {
     setIsParsingFiles(false);
   };
 
-  const handleGenerate = async (useHeaderPrompt = true, overridePrompt?: string, context?: { text: string[], images: {data: string, mimeType: string}[] }) => {
+  const handleGenerate = async (
+    useHeaderPrompt = true, 
+    overridePrompt?: string, 
+    context?: { text: string[], images: {data: string, mimeType: string}[] },
+    isRefiningPresentation = false
+  ) => {
     const targetPrompt = overridePrompt || (useHeaderPrompt ? prompt : (presentation?.title || prompt));
     if (!targetPrompt.trim()) return;
     setIsGenerating(true);
-    setStatusMessage('Generating presentation...');
+    setStatusMessage(isRefiningPresentation ? 'Refining presentation...' : 'Generating presentation...');
     
     try {
-      const data = await generatePresentation(targetPrompt, context);
+      const data = await generatePresentation(
+        targetPrompt, 
+        context, 
+        isRefiningPresentation ? (presentation || undefined) : undefined
+      );
       const slidesWithIds = data.slides.map((s: any) => ({
         ...s,
         id: Math.random().toString(36).substr(2, 9),
@@ -398,7 +408,7 @@ const EditorView: React.FC = () => {
     }
     const contextTexts = wizardFiles.filter(f => !f.isImage).map(f => `FILE: ${f.name}\n${f.content}`);
     const contextImages = wizardFiles.filter(f => f.isImage).map(f => ({ data: f.content, mimeType: f.mimeType }));
-    handleGenerate(false, finalPrompt, { text: contextTexts, images: contextImages });
+    handleGenerate(false, finalPrompt, { text: contextTexts, images: contextImages }, isGlobalRefine);
     setShowPromptWizard(false);
   };
 
@@ -659,6 +669,12 @@ const EditorView: React.FC = () => {
                     <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth={2}/></svg>
                     <span className="text-xs font-bold">Prompt Wizard</span>
                   </button>
+                  {presentation && (
+                    <button onClick={() => { handleGenerate(true, undefined, undefined, true); setShowWizardDropdown(false); }} className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-purple-50 rounded-lg text-left border-t mt-1 group">
+                      <svg className="w-4 h-4 text-purple-600 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2}/></svg>
+                      <span className="text-xs font-bold text-purple-700">Refine Slideshow</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -962,6 +978,9 @@ const EditorView: React.FC = () => {
           isParsing={isParsingFiles}
           onFileUpload={handleFileUpload}
           uploadError={uploadError}
+          isGlobalRefine={isGlobalRefine}
+          setIsGlobalRefine={setIsGlobalRefine}
+          hasExistingPresentation={!!presentation}
         />
       )}
     </div>
@@ -969,7 +988,7 @@ const EditorView: React.FC = () => {
 };
 
 // ... Simplified PromptWizard Component ...
-const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, slideCount, setSlideCount, topics, setTopics, files, setFiles, urls, setUrls, urlInput, setUrlInput, isParsing, onFileUpload, uploadError, slideMode, setSlideMode }) => {
+const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, slideCount, setSlideCount, topics, setTopics, files, setFiles, urls, setUrls, urlInput, setUrlInput, isParsing, onFileUpload, uploadError, slideMode, setSlideMode, isGlobalRefine, setIsGlobalRefine, hasExistingPresentation }) => {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -1044,32 +1063,50 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
             </section>
             
             <section className="space-y-6">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Structure</label>
-              <div className="space-y-4 mb-4">
-                <div className="flex items-center space-x-2 p-1 bg-slate-100 rounded-xl w-fit">
-                  <button onClick={() => setSlideMode('exact')} className={`px-4 py-1 text-[10px] font-black uppercase rounded-lg transition-all ${slideMode === 'exact' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Exact Count</button>
-                  <button onClick={() => setSlideMode('qualitative')} className={`px-4 py-1 text-[10px] font-black uppercase rounded-lg transition-all ${slideMode === 'qualitative' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Quick Pick</button>
-                </div>
-                
-                {slideMode === 'exact' ? (
-                  <div className="flex items-center space-x-4">
-                    <input type="range" min="3" max="25" value={slideCount} onChange={(e) => setSlideCount(parseInt(e.target.value))} className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                    <span className="w-16 bg-slate-50 rounded-lg p-2 text-center text-xs font-bold border">Slides: {slideCount}</span>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {qualitativeOptions.map(opt => (
-                      <button 
-                        key={opt.label} 
-                        onClick={() => setSlideCount(opt.count)}
-                        className={`p-2 rounded-xl text-xs font-bold border transition-all ${slideCount === opt.count ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-                      >
-                        {opt.label} (Approx {opt.count})
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <p className="text-[10px] font-black text-indigo-500 uppercase">Final slides to generate: {slideCount}</p>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Structure & Mode</label>
+              
+              <div className="bg-white border rounded-2xl p-4 space-y-4">
+                 <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <input 
+                      type="checkbox" 
+                      id="global-refine-mode" 
+                      disabled={!hasExistingPresentation}
+                      checked={isGlobalRefine} 
+                      onChange={(e) => setIsGlobalRefine(e.target.checked)}
+                      className="w-4 h-4 text-purple-600 border-slate-300 rounded focus:ring-purple-500"
+                    />
+                    <label htmlFor="global-refine-mode" className={`flex-1 text-xs cursor-pointer select-none ${!hasExistingPresentation ? 'opacity-40' : ''}`}>
+                      <span className="font-bold text-slate-700 block">Refine Existing Deck</span>
+                      <span className="text-[10px] text-slate-500">Update the current presentation instead of starting over.</span>
+                    </label>
+                 </div>
+
+                 <div className="space-y-4 pt-2 border-t">
+                    <div className="flex items-center space-x-2 p-1 bg-slate-100 rounded-xl w-fit">
+                      <button onClick={() => setSlideMode('exact')} className={`px-4 py-1 text-[10px] font-black uppercase rounded-lg transition-all ${slideMode === 'exact' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Exact Count</button>
+                      <button onClick={() => setSlideMode('qualitative')} className={`px-4 py-1 text-[10px] font-black uppercase rounded-lg transition-all ${slideMode === 'qualitative' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>Quick Pick</button>
+                    </div>
+                    
+                    {slideMode === 'exact' ? (
+                      <div className="flex items-center space-x-4">
+                        <input type="range" min="3" max="25" value={slideCount} onChange={(e) => setSlideCount(parseInt(e.target.value))} className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <span className="w-16 bg-slate-50 rounded-lg p-2 text-center text-xs font-bold border">Slides: {slideCount}</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {qualitativeOptions.map(opt => (
+                          <button 
+                            key={opt.label} 
+                            onClick={() => setSlideCount(opt.count)}
+                            className={`p-2 rounded-xl text-xs font-bold border transition-all ${slideCount === opt.count ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                          >
+                            {opt.label} (Approx {opt.count})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[10px] font-black text-indigo-500 uppercase">Target slide count: {slideCount}</p>
+                 </div>
               </div>
             </section>
           </div>
