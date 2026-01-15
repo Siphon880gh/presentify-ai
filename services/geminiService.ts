@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { SlideLayout, Slide, SlideTransition } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -192,4 +192,22 @@ export const regenerateSlide = async (topic: string, slideContext: string): Prom
     ...slideData,
     imageUrl
   };
+};
+
+export const speakText = async (text: string): Promise<string> => {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: `Say clearly: ${text}` }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: 'Zephyr' },
+        },
+      },
+    },
+  });
+  const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!base64) throw new Error("No audio data");
+  return base64;
 };

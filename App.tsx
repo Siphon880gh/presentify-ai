@@ -1,13 +1,35 @@
-
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Presentation, Slide, SlideLayout, SlideTransition } from './types';
-import { generatePresentation, generateImage, refineSlide } from './services/geminiService';
+import { generatePresentation, generateImage, refineSlide, speakText } from './services/geminiService';
 import SlideRenderer from './components/SlideRenderer';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import pptxgen from 'pptxgenjs';
 import { DEMO_PRESENTATION } from './demo';
+
+// Audio Helpers
+function decode(base64: string) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
 
 // Dynamic imports for heavy parsing libs
 const getPdfLib = async () => {
@@ -839,10 +861,31 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
 
 const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number, onExit: () => void }> = ({ presentation, initialIndex, onExit }) => {
   const [index, setIndex] = useState(initialIndex);
-  
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const autoPlayTimerRef = useRef<number | null>(null);
+
+  const stopAutoPlaySession = useCallback(() => {
+    if (currentSourceRef.current) {
+      try { currentSourceRef.current.stop(); } catch (e) {}
+      currentSourceRef.current = null;
+    }
+    if (autoPlayTimerRef.current) {
+      window.clearTimeout(autoPlayTimerRef.current);
+      autoPlayTimerRef.current = null;
+    }
+  }, []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'ArrowRight' || e.key === ' ') setIndex(i => Math.min(i + 1, presentation.slides.length - 1));
-    if (e.key === 'ArrowLeft') setIndex(i => Math.max(i - 1, 0));
+    if (e.key === 'ArrowRight' || e.key === ' ') {
+      setIndex(i => Math.min(i + 1, presentation.slides.length - 1));
+      setIsAutoPlaying(false); // Manual move cancels auto-play
+    }
+    if (e.key === 'ArrowLeft') {
+      setIndex(i => Math.max(i - 1, 0));
+      setIsAutoPlaying(false); // Manual move cancels auto-play
+    }
     if (e.key === 'Escape') onExit();
   }, [presentation.slides.length, onExit]);
 
@@ -850,6 +893,55 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    if (!isAutoPlaying) {
+      stopAutoPlaySession();
+      return;
+    }
+
+    const currentSlide = presentation.slides[index];
+    const advance = () => {
+      if (index < presentation.slides.length - 1) {
+        setIndex(i => i + 1);
+      } else {
+        setIsAutoPlaying(false);
+      }
+    };
+
+    if (currentSlide.notes?.trim()) {
+      const playNotes = async () => {
+        try {
+          const base64 = await speakText(currentSlide.notes!);
+          if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+          }
+          const ctx = audioContextRef.current;
+          if (ctx.state === 'suspended') await ctx.resume();
+          
+          const buffer = await decodeAudioData(decode(base64), ctx, 24000, 1);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.onended = () => {
+            if (currentSourceRef.current === source) {
+              advance();
+            }
+          };
+          currentSourceRef.current = source;
+          source.start();
+        } catch (e) {
+          console.error("AutoPlay TTS failed", e);
+          autoPlayTimerRef.current = window.setTimeout(advance, 7000);
+        }
+      };
+      playNotes();
+    } else {
+      autoPlayTimerRef.current = window.setTimeout(advance, 7000);
+    }
+
+    return () => stopAutoPlaySession();
+  }, [index, isAutoPlaying, presentation.slides.length, stopAutoPlaySession]);
 
   const currentSlide = presentation.slides[index];
 
@@ -860,12 +952,12 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
         
         {/* Navigation Overlays */}
         <div className="absolute inset-y-0 left-0 w-24 flex items-center justify-center group">
-          <button onClick={() => setIndex(i => Math.max(i - 1, 0))} className="p-4 bg-white/20 hover:bg-white/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all">
+          <button onClick={() => { setIndex(i => Math.max(i - 1, 0)); setIsAutoPlaying(false); }} className="p-4 bg-white/20 hover:bg-white/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all">
             <svg className="w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 19l-7-7 7-7" strokeWidth={3}/></svg>
           </button>
         </div>
         <div className="absolute inset-y-0 right-0 w-24 flex items-center justify-center group">
-          <button onClick={() => setIndex(i => Math.min(i + 1, presentation.slides.length - 1))} className="p-4 bg-white/20 hover:bg-white/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all">
+          <button onClick={() => { setIndex(i => Math.min(i + 1, presentation.slides.length - 1)); setIsAutoPlaying(false); }} className="p-4 bg-white/20 hover:bg-white/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all">
             <svg className="w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 5l7 7-7 7" strokeWidth={3}/></svg>
           </button>
         </div>
@@ -880,9 +972,31 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
         <div className="flex items-center space-x-12 flex-1 justify-center px-12">
           <div className="max-w-xl truncate text-slate-400 italic text-sm">{currentSlide.notes || 'No notes for this slide'}</div>
         </div>
-        <button onClick={onExit} className="text-slate-500 hover:text-white transition-colors">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" strokeWidth={2}/></svg>
-        </button>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={() => setIsAutoPlaying(!isAutoPlaying)} 
+            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+          >
+            {isAutoPlaying ? (
+              <>
+                <div className="flex space-x-0.5 items-center h-3">
+                  <div className="w-0.5 h-full bg-white animate-pulse"></div>
+                  <div className="w-0.5 h-2/3 bg-white animate-pulse delay-75"></div>
+                  <div className="w-0.5 h-full bg-white animate-pulse delay-150"></div>
+                </div>
+                <span>Playing</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M4.5 3.5a.5.5 0 01.8-.4l11 6.5a.5.5 0 010 .8l-11 6.5a.5.5 0 01-.8-.4v-13z" /></svg>
+                <span>Auto-Play</span>
+              </>
+            )}
+          </button>
+          <button onClick={onExit} className="text-slate-500 hover:text-white transition-colors">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" strokeWidth={2}/></svg>
+          </button>
+        </div>
       </div>
     </div>
   );

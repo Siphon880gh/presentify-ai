@@ -10,16 +10,16 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Framework:** React 19 (via ESM imports)
 - **Routing:** HashRouter (via `react-router-dom`)
 - **Styling:** Tailwind CSS (via CDN in `index.html`)
-- **AI Integration:** `@google/genai` (Gemini 3 Flash for text, Gemini 2.5 Flash for images)
+- **AI Integration:** `@google/genai` (Gemini 3 Flash for text, Gemini 2.5 Flash for images, Gemini 2.5 Flash TTS for narration)
 - **Exporting Libraries:** `jspdf` (PDF generation), `html2canvas` (DOM capturing), `pptxgenjs` (PowerPoint generation)
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
 - `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header and the **Prompt Wizard** with source grounding.
 - `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
-- `PresenterView`: A specialized view for presenters with slide previews and speaker notes.
+- `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Now includes an **Auto-Play** mode that uses TTS to read notes and advance slides.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor`.
-- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation with multi-modal context support.
+- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation and TTS audio generation via `speakText`.
 - `types.ts`: Schema definitions for the application.
 
 ## 3. Architecture & Code Flow
@@ -29,31 +29,20 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Prompt Field:** Monitors `prompt.length` and focus state via `isPromptFocused`. Expands to `max-w-full` when focused with ≥ 33 chars using a smooth **500ms ease-in-out** transition. The height is constrained between **34px and 60px** to stabilize the layout, with **useLayoutEffect** ensuring flicker-free auto-resizing.
 - **Split Button:** The "Create" button features a split dropdown chevron.
 - **Inline Button Labels:** Header icon buttons use a custom `TooltipButton` that expands horizontally on hover to reveal descriptive text labels with a smooth animation.
-- **Prompt Wizard:** A comprehensive modal allowing users to:
-  - Input a detailed multiline context.
-  - **Slide Count Selection:** Choose between "Exact Count" (3-25 slider) and "Quick Pick" qualitative options (Few=5, Moderate=10, Many=15, Numerous=20). Quick Pick selections instruct the AI to generate an *approximate* number of slides, whereas Exact Count enforces a specific target.
-  - **Source Grounding:** Upload documents (PDF, DOCX, CSV, TXT, **Markdown .md**, Images) or provide web URLs.
-  - **URL Management:** A visible list of added URLs is displayed, allowing users to verify and remove specific links before generation.
-  - **Structural Focus Row:** The "Slide Focus" reordering section takes up a full row at the bottom of the modal, providing more space for defining complex slide sequences.
-  - **Structural Drag-and-Drop:** Rearrange slide topics using native drag-and-drop to define the generation sequence.
-  - Sync prompt text between header and wizard automatically.
-  - Reset wizard state to clear custom structure and sources.
+- **Prompt Wizard:** A comprehensive modal allowing users to choose between exact/approximate counts, grounding files, and custom slide structures.
+
+### Presenter Mode & Auto-Play (NEW)
+- **Mechanism:** Uses the browser's Fullscreen API.
+- **Auto-Play Logic:** A toggle in the HUD activates an automated narration sequence.
+  - **With Notes:** Uses `gemini-2.5-flash-preview-tts` to generate narration. Slides advance automatically when the audio finishes playing.
+  - **Without Notes:** Slides advance automatically after a 7-second pause.
+  - **Manual Intervention:** Arrow keys or manual navigation buttons automatically disable Auto-Play mode to return control to the user.
+- **Audio Processing:** Implements a raw PCM decoder for Gemini TTS output, ensuring high-fidelity voice playback within an `AudioContext`.
 
 ### Grounded Content Generation
 - Files are parsed on the client (PDF, DOCX via libraries; CSV, TXT, MD via native APIs).
 - Images are converted to base64 and sent as multi-modal parts to Gemini.
-- URL contents are fetched (subject to CORS) and extracted for text context.
-- Gemini 3 Flash receives all source material as `parts` in the generation request, prioritizing it for factual accuracy.
-
-### Presenter Mode (Fullscreen)
-- **Mechanism:** Uses the browser's Fullscreen API. Controls appear on hover at the bottom.
-- **State Sync:** Uses `localStorage` and `storage` events to keep current slide and notes synchronized between editor and presenter windows.
-
-### localStorage Schema
-- `presentify_current`: Active session (no images).
-- `presentify_library`: Metadata for all saved presentations.
-- `presentify_pres_{id}`: Presentation content (no images).
-- `presentify_img_{presId}_{slideId}`: Individual slide images.
+- Gemini 3 Flash receives all source material as `parts` in the generation request.
 
 ---
 
