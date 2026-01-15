@@ -21,7 +21,8 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images) and **Image Resizing**. Includes optimized bullet point alignment for high-quality PDF exports via adjusted Tailwind spacing.
 - `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement via `refineSlide`.
 - `types.ts`: Schema definitions, now including `FloatingElement` and updated `Slide` schema with dimension support.
-- `demo/index.ts`: Sample presentation data.
+- `demo/index.ts`: Sample presentation data, now enhanced with **Speaker Notes** to demonstrate Auto-Play/TTS capabilities.
+- `vite-env.d.ts`: Shorthand module declarations for asset resolution.
 
 ## 3. Architecture & Code Flow
 
