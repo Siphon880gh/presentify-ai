@@ -221,6 +221,33 @@ const EditorView: React.FC = () => {
     }
   }, [prompt]);
 
+  // Global Keyboard Navigation for Editor
+  useEffect(() => {
+    // Only bind if not presenting to avoid conflict with PresenterView key listeners
+    if (isFullscreenPresenting) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't navigate if user is in an input field, textarea or contenteditable element
+      const activeEl = document.activeElement;
+      const isEditable = activeEl && (
+        activeEl.tagName === 'INPUT' || 
+        activeEl.tagName === 'TEXTAREA' || 
+        activeEl.getAttribute('contenteditable') === 'true'
+      );
+      
+      if (isEditable || !presentation) return;
+
+      if (e.key === 'ArrowRight') {
+        setCurrentSlideIndex(prev => Math.min(prev + 1, presentation.slides.length - 1));
+      } else if (e.key === 'ArrowLeft') {
+        setCurrentSlideIndex(prev => Math.max(prev - 1, 0));
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [presentation, isFullscreenPresenting]);
+
   // Close dropdowns on click outside
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -1061,7 +1088,7 @@ const EditorView: React.FC = () => {
                           {previewingVoice === voiceName ? (
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                           ) : (
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 100-16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
                           )}
                         </button>
                       </div>

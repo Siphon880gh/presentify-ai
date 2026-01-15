@@ -15,8 +15,8 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Includes logic for **Instant Voice Previews**, gender indicators (M/F), and a fixed dependency tracking system in `PresenterView` to ensure slide-level voice overrides are respected.
-- `EditorView`: Manages presentation state and editing. Implements a `previewCacheRef` and background pre-fetching logic to ensure voice samples play instantly when triggered.
+- `App.tsx`: The main orchestrator. Includes logic for **Instant Voice Previews**, gender indicators (M/F), and a fixed dependency tracking system in `PresenterView` to ensure slide-level voice overrides are respected. Implements **Global Keyboard Navigation** in `EditorView`.
+- `EditorView`: Manages presentation state and editing. Implements a `previewCacheRef` and background pre-fetching logic. Now features arrow key navigation to switch slides when not focused on an input.
 - `PresenterView`: A specialized view for presenters. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides. Features improved dependency tracking for the entire `presentation` object to ensure voice overrides are always up-to-date.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** and **Image Resizing**.
 - `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement.
@@ -34,6 +34,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
   - **Voice Metadata:** Displays gender indicators (M/F) for all available voices.
   - **Instant Preview:** When the modal opens, it pre-fetches sample audio for all voices. Clicking the preview button plays the cached audio instantly.
 - **Slide Reordering:** HTML5 Drag and Drop support in the slide outline.
+- **Keyboard Navigation:** In `EditorView`, ArrowLeft and ArrowRight keys advance or retreat through slides unless an input, textarea, or contenteditable element is focused.
 
 ### Presenter Mode & Auto-Play (High Performance)
 - **Mechanism:** Uses the browser's Fullscreen API.
