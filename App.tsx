@@ -577,7 +577,7 @@ const EditorView: React.FC = () => {
               </div>
 
               <button onClick={openPresenterMode} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center space-x-2 ml-1">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeWidth={2}/></svg>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2v8a2 2 0 002 2z" strokeWidth={2}/></svg>
                 <span>Present</span>
               </button>
             </>
@@ -862,11 +862,14 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
 const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number, onExit: () => void }> = ({ presentation, initialIndex, onExit }) => {
   const [index, setIndex] = useState(initialIndex);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const autoPlayTimerRef = useRef<number | null>(null);
+  const lastGenerationIdRef = useRef(0);
 
   const stopAutoPlaySession = useCallback(() => {
+    lastGenerationIdRef.current++; // Invalidate pending speakText calls
     if (currentSourceRef.current) {
       try { currentSourceRef.current.stop(); } catch (e) {}
       currentSourceRef.current = null;
@@ -875,6 +878,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
       window.clearTimeout(autoPlayTimerRef.current);
       autoPlayTimerRef.current = null;
     }
+    setIsAudioLoading(false);
   }, []);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -911,8 +915,14 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
 
     if (currentSlide.notes?.trim()) {
       const playNotes = async () => {
+        setIsAudioLoading(true);
+        const generationId = ++lastGenerationIdRef.current;
         try {
           const base64 = await speakText(currentSlide.notes!);
+          // If a newer request was started or autoplay turned off while waiting, abort
+          if (generationId !== lastGenerationIdRef.current) return;
+          
+          setIsAudioLoading(false);
           if (!audioContextRef.current) {
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
           }
@@ -924,7 +934,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
           source.buffer = buffer;
           source.connect(ctx.destination);
           source.onended = () => {
-            if (currentSourceRef.current === source) {
+            if (currentSourceRef.current === source && isAutoPlaying) {
               advance();
             }
           };
@@ -932,12 +942,15 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
           source.start();
         } catch (e) {
           console.error("AutoPlay TTS failed", e);
-          autoPlayTimerRef.current = window.setTimeout(advance, 7000);
+          if (generationId === lastGenerationIdRef.current) {
+            setIsAudioLoading(false);
+            autoPlayTimerRef.current = window.setTimeout(advance, 10000);
+          }
         }
       };
       playNotes();
     } else {
-      autoPlayTimerRef.current = window.setTimeout(advance, 7000);
+      autoPlayTimerRef.current = window.setTimeout(advance, 10000);
     }
 
     return () => stopAutoPlaySession();
@@ -975,9 +988,15 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
         <div className="flex items-center space-x-4">
           <button 
             onClick={() => setIsAutoPlaying(!isAutoPlaying)} 
-            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+            disabled={isAudioLoading}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'} ${isAudioLoading ? 'opacity-80 cursor-wait' : ''}`}
           >
-            {isAutoPlaying ? (
+            {isAudioLoading ? (
+              <>
+                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <span>Thinking...</span>
+              </>
+            ) : isAutoPlaying ? (
               <>
                 <div className="flex space-x-0.5 items-center h-3">
                   <div className="w-0.5 h-full bg-white animate-pulse"></div>
