@@ -170,6 +170,7 @@ const EditorView: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [regenPrompt, setRegenPrompt] = useState('');
+  const [isRefinement, setIsRefinement] = useState(false);
   const [showImageAddModal, setShowImageAddModal] = useState(false);
   const [imageInputUrl, setImageInputUrl] = useState('');
   const [imageAIPrompt, setImageAIPrompt] = useState('');
@@ -545,9 +546,14 @@ const EditorView: React.FC = () => {
   const handleRegenerateActiveSlide = async () => {
     if (!activeSlide || !presentation) return;
     setIsGenerating(true);
-    setStatusMessage('Regenerating slide...');
+    setStatusMessage(isRefinement ? 'Refining slide...' : 'Regenerating slide...');
     try {
-      const refined = await refineSlide(presentation.title, regenPrompt || 'Refine this slide with fresh content and better structure.');
+      const refined = await refineSlide(
+        presentation.title, 
+        regenPrompt || 'Refine this slide with fresh content and better structure.',
+        activeSlide,
+        isRefinement
+      );
       updateSlide({ ...activeSlide, ...refined });
       setShowRegenModal(false);
       setRegenPrompt('');
@@ -791,7 +797,7 @@ const EditorView: React.FC = () => {
                   )}
                </div>
                <div className="w-px h-4 bg-slate-200" />
-               <button onClick={() => setShowRegenModal(true)} className="flex items-center space-x-2 text-xs font-bold text-purple-600 hover:text-purple-700 px-2 py-1 rounded-lg hover:bg-purple-50">
+               <button onClick={() => { setIsRefinement(false); setShowRegenModal(true); }} className="flex items-center space-x-2 text-xs font-bold text-purple-600 hover:text-purple-700 px-2 py-1 rounded-lg hover:bg-purple-50">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2}/></svg>
                   <span>Regenerate Slide</span>
                </button>
@@ -847,7 +853,22 @@ const EditorView: React.FC = () => {
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
             <h3 className="text-xl font-bold mb-2">Regenerate Slide</h3>
             <p className="text-xs text-slate-400 mb-4">Tell the AI what to change about this specific slide.</p>
-            <textarea value={regenPrompt} onChange={(e) => setRegenPrompt(e.target.value)} className="w-full border p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-purple-500 h-24 resize-none text-sm" placeholder="e.g., Make it more data-focused, change the tone to professional..." />
+            <textarea value={regenPrompt} onChange={(e) => setRegenPrompt(e.target.value)} className="w-full border p-3 rounded-xl mb-4 outline-none focus:ring-2 focus:ring-purple-500 h-24 resize-none text-sm" placeholder="e.g., Make it more data-focused, change the tone to professional..." />
+            
+            <div className="flex items-center space-x-3 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
+               <input 
+                 type="checkbox" 
+                 id="refinement-mode" 
+                 checked={isRefinement} 
+                 onChange={(e) => setIsRefinement(e.target.checked)}
+                 className="w-4 h-4 text-purple-600 border-slate-300 rounded focus:ring-purple-500"
+               />
+               <label htmlFor="refinement-mode" className="flex-1 text-xs cursor-pointer select-none">
+                 <span className="font-bold text-slate-700 block">Refinement Mode</span>
+                 <span className="text-[10px] text-slate-500">Build on existing content instead of starting fresh.</span>
+               </label>
+            </div>
+
             <div className="flex justify-end space-x-3">
               <button onClick={() => setShowRegenModal(false)} className="px-6 py-2 text-slate-400">Cancel</button>
               <button onClick={handleRegenerateActiveSlide} className="bg-purple-600 text-white px-8 py-2 rounded-xl font-bold">Regenerate</button>
@@ -864,13 +885,13 @@ const EditorView: React.FC = () => {
                <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">From URL</label>
                  <div className="flex space-x-2">
-                    <input type="text" value={imageInputUrl} onChange={(e) => setImageInputUrl(e.target.value)} className="flex-1 border p-2 rounded-lg text-xs outline-none" placeholder="https://..." />
+                    <input type="text" value={imageInputUrl} onChange={(e) => imageInputUrl(e.target.value)} className="flex-1 border p-2 rounded-lg text-xs outline-none" placeholder="https://..." />
                     <button onClick={() => handleAddImageElement('url')} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Add</button>
                  </div>
                </div>
                <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Generated</label>
-                 <textarea value={imageAIPrompt} onChange={(e) => setImageAIPrompt(e.target.value)} className="w-full border p-2 rounded-lg text-xs outline-none h-20 resize-none" placeholder="Describe the image you want..." />
+                 <textarea value={imageAIPrompt} onChange={(e) => imageAIPrompt(e.target.value)} className="w-full border p-2 rounded-lg text-xs outline-none h-20 resize-none" placeholder="Describe the image you want..." />
                  <button onClick={() => handleAddImageElement('ai')} className="w-full bg-purple-600 text-white py-2 rounded-lg text-xs font-bold">Generate & Add</button>
                </div>
                <div className="pt-4 border-t text-center">

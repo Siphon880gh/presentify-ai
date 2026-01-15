@@ -97,13 +97,33 @@ export const generatePresentation = async (
   return JSON.parse(response.text || "{}");
 };
 
-export const refineSlide = async (topic: string, refinementPrompt: string): Promise<Partial<Slide>> => {
+export const refineSlide = async (
+  topic: string, 
+  refinementPrompt: string, 
+  currentSlide?: Slide, 
+  isRefinementMode?: boolean
+): Promise<Partial<Slide>> => {
+  let sysPrompt = `You are a professional presentation designer. Refine this slide for a presentation about "${topic}". 
+    User Refinement Request: "${refinementPrompt}"`;
+
+  if (isRefinementMode && currentSlide) {
+    sysPrompt += `
+    
+    EXISTING SLIDE CONTENT TO BUILD UPON:
+    - Title: ${currentSlide.title}
+    - Subtitle: ${currentSlide.subtitle || 'None'}
+    - Content: ${JSON.stringify(currentSlide.content)}
+    
+    CRITICAL INSTRUCTION: BUILD ON THE EXISTING CONTENT. Extend points or add new ones. DO NOT remove or reword existing content unless the user's prompt clearly requires a specific replacement or correction. Maintain the existing context while expanding.`;
+  }
+
+  sysPrompt += `
+    
+    Ensure the layout is appropriate for the content and include updated speaker notes. Return a JSON object with title, subtitle, content (array), layout, transitionType, imagePrompt, and notes.`;
+
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `You are a professional presentation designer. Refine this slide for a presentation about "${topic}". 
-    User Refinement Request: "${refinementPrompt}"
-    
-    Ensure the layout is appropriate for the new content and include updated speaker notes. Return a JSON object with title, subtitle, content (array), layout, transitionType, imagePrompt, and notes.`,
+    contents: sysPrompt,
     config: {
       responseMimeType: "application/json",
       responseSchema: {

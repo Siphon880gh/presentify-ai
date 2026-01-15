@@ -19,7 +19,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - `EditorView`: Manages presentation state, slide navigation, library management, and **Advanced Edit Mode** toggling. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
 - `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Now includes an **Auto-Play** mode that uses TTS to read notes and advance slides.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images) and **Image Resizing**. Includes optimized bullet point alignment for high-quality PDF exports via adjusted Tailwind spacing.
-- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement via `refineSlide`.
+- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement via `refineSlide`. Updated `refineSlide` to support additive **Refinement Mode**.
 - `types.ts`: Schema definitions, now including `FloatingElement` and updated `Slide` schema with dimension support.
 - `demo/index.ts`: Sample presentation data, now enhanced with **Speaker Notes** to demonstrate Auto-Play/TTS capabilities.
 - `vite-env.d.ts`: Shorthand module declarations for asset resolution.
@@ -33,7 +33,8 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Bullet Point Alignment:** Bullet points in lists are manually aligned using Tailwind's `mr` and `mt` classes (e.g., `mr-4 mt-2.5` for standard content) to ensure they render centered and spaced correctly relative to text baselines even when captured by `html2canvas` for PDF export.
 - **Slide Reordering:** When in Edit Mode, the slide outline in the `Aside` becomes draggable (HTML5 Drag and Drop API), allowing users to re-sequence slides instantly. A **blue horizontal insert indicator** appears during drag-over to show exactly where the slide will land.
 - **Layout Switching:** A "Layout" dropdown in the Edit Mode toolbar allows users to instantly swap the layout of the active slide (e.g., TITLE to IMAGE_LEFT). The content is preserved and re-adapted to the new structural skeleton.
-- **Single Slide Regeneration:** A floating toolbar in the editor allows users to regenerate the active slide with a custom AI prompt, leveraging the `refineSlide` service for targeted updates.
+- **Single Slide Regeneration:** A floating toolbar in the editor allows users to regenerate the active slide. 
+  - **Refinement Mode:** A specialized checkbox allows users to "Refine" instead of "Regenerate". When enabled, Gemini receives the existing slide content and is strictly instructed to build upon or extend it without removing existing points, unless explicitly requested.
 - **Main Image Regeneration:** In Edit Mode, hovering over the main slide image reveals a "Regenerate Image" overlay. Clicking this triggers `handleRegenerateMainImage` in `App.tsx`, which uses the image prompt (or slide title) to fetch a new visual from Gemini 2.5 Flash Image.
 - **Floating Elements:** Users can add independent text and image elements to any slide. 
   - **Text:** Uses the `RichTextEditor` for consistent styling.
