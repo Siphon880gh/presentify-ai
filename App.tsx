@@ -77,6 +77,13 @@ const qualitativeOptions = [
 ];
 
 const AVAILABLE_VOICES = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'];
+const VOICE_METADATA: Record<string, { gender: 'M' | 'F' }> = {
+  Puck: { gender: 'M' },
+  Charon: { gender: 'M' },
+  Kore: { gender: 'F' },
+  Fenrir: { gender: 'M' },
+  Zephyr: { gender: 'F' }
+};
 
 const stripImagesFromPresentation = (pres: Presentation): { presentation: Presentation; images: Record<string, string> } => {
   const images: Record<string, string> = {};
@@ -181,6 +188,7 @@ const EditorView: React.FC = () => {
 
   // Voice Preview State
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+  const previewCacheRef = useRef<Record<string, string>>({});
 
   // Drag handles for outline
   const slideDragItem = useRef<number | null>(null);
@@ -230,6 +238,22 @@ const EditorView: React.FC = () => {
     window.addEventListener('mousedown', handleOutsideClick);
     return () => window.removeEventListener('mousedown', handleOutsideClick);
   }, [showExportMenu, showWizardDropdown, showLayoutMenu]);
+
+  // Pre-fetch voice previews when the voice modal opens for "instant" playback
+  useEffect(() => {
+    if (showVoiceModal) {
+      AVAILABLE_VOICES.forEach(async (voice) => {
+        if (!previewCacheRef.current[voice]) {
+          try {
+            const base64 = await speakText(`Sample for ${voice}`, voice);
+            previewCacheRef.current[voice] = base64;
+          } catch (e) {
+            console.warn(`Failed to pre-fetch preview for ${voice}`, e);
+          }
+        }
+      });
+    }
+  }, [showVoiceModal]);
 
   // Sync session to storage
   const syncToCurrentStorage = useCallback(() => {
@@ -503,9 +527,24 @@ const EditorView: React.FC = () => {
 
   const handlePreviewVoice = async (voice: string) => {
     if (previewingVoice) return;
+    
+    // Check cache for "instant" playback
+    let base64 = previewCacheRef.current[voice];
+    
+    if (!base64) {
+      setPreviewingVoice(voice);
+      try {
+        base64 = await speakText(`Hello, I am ${voice}. This is how I will sound when narrating your presentation.`, voice);
+        previewCacheRef.current[voice] = base64;
+      } catch (e) {
+        console.error("Voice preview failed", e);
+        setPreviewingVoice(null);
+        return;
+      }
+    }
+
     setPreviewingVoice(voice);
     try {
-      const base64 = await speakText(`Hello, I am ${voice}. This is how I will sound when narrating your presentation.`, voice);
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const buffer = await decodeAudioData(decode(base64), ctx, 24000, 1);
       const source = ctx.createBufferSource();
@@ -516,7 +555,7 @@ const EditorView: React.FC = () => {
         setPreviewingVoice(null);
       };
     } catch (e) {
-      console.error("Voice preview failed", e);
+      console.error("Audio playback failed", e);
       setPreviewingVoice(null);
     }
   };
@@ -973,20 +1012,20 @@ const EditorView: React.FC = () => {
                <div className="space-y-4">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Default Presentation Voice</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {AVAILABLE_VOICES.map(voice => (
-                      <div key={voice} className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1 pr-2">
+                    {AVAILABLE_VOICES.map(voiceName => (
+                      <div key={voiceName} className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1 pr-2">
                         <button 
-                          onClick={() => setPresentation({...presentation, defaultVoiceName: voice})}
-                          className={`flex-1 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${presentation.defaultVoiceName === voice || (!presentation.defaultVoiceName && voice === 'Zephyr') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                          onClick={() => setPresentation({...presentation, defaultVoiceName: voiceName})}
+                          className={`flex-1 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${presentation.defaultVoiceName === voiceName || (!presentation.defaultVoiceName && voiceName === 'Zephyr') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
                         >
-                          {voice}
+                          {voiceName} ({VOICE_METADATA[voiceName].gender})
                         </button>
                         <button 
-                          onClick={() => handlePreviewVoice(voice)}
-                          disabled={previewingVoice !== null}
-                          className={`ml-1 p-1.5 rounded-lg transition-colors ${previewingVoice === voice ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-600 hover:bg-white'}`}
+                          onClick={() => handlePreviewVoice(voiceName)}
+                          disabled={previewingVoice !== null && previewingVoice !== voiceName}
+                          className={`ml-1 p-1.5 rounded-lg transition-colors ${previewingVoice === voiceName ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-600 hover:bg-white'}`}
                         >
-                          {previewingVoice === voice ? (
+                          {previewingVoice === voiceName ? (
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                           ) : (
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
@@ -1006,21 +1045,20 @@ const EditorView: React.FC = () => {
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {AVAILABLE_VOICES.map(voice => (
-                      <div key={voice} className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1 pr-2">
+                    {AVAILABLE_VOICES.map(voiceName => (
+                      <div key={voiceName} className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1 pr-2">
                         <button 
-                          key={voice}
-                          onClick={() => updateSlide({...activeSlide!, voiceName: voice})}
-                          className={`flex-1 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeSlide?.voiceName === voice ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                          onClick={() => updateSlide({...activeSlide!, voiceName: voiceName})}
+                          className={`flex-1 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeSlide?.voiceName === voiceName ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
                         >
-                          {voice}
+                          {voiceName} ({VOICE_METADATA[voiceName].gender})
                         </button>
                         <button 
-                          onClick={() => handlePreviewVoice(voice)}
-                          disabled={previewingVoice !== null}
-                          className={`ml-1 p-1.5 rounded-lg transition-colors ${previewingVoice === voice ? 'text-purple-600' : 'text-slate-400 hover:text-purple-600 hover:bg-white'}`}
+                          onClick={() => handlePreviewVoice(voiceName)}
+                          disabled={previewingVoice !== null && previewingVoice !== voiceName}
+                          className={`ml-1 p-1.5 rounded-lg transition-colors ${previewingVoice === voiceName ? 'text-purple-600' : 'text-slate-400 hover:text-purple-600 hover:bg-white'}`}
                         >
-                          {previewingVoice === voice ? (
+                          {previewingVoice === voiceName ? (
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                           ) : (
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>

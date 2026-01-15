@@ -15,12 +15,12 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization. Now includes **Voice Narration Settings** with live **Voice Previews**.
-- `EditorView`: Manages presentation state, slide navigation, library management, and **Advanced Edit Mode** toggling. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
-- `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides, now with support for per-slide voice overrides.
-- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images) and **Image Resizing**.
-- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText` (supporting multiple voices), and slide refinement via `refineSlide`.
-- `types.ts`: Schema definitions, now including `FloatingElement` and updated `Slide` and `Presentation` schemas with `voiceName` support.
+- `App.tsx`: The main orchestrator. Now includes **Instant Voice Previews** via background pre-fetching and M/F indicators (M for Puck/Charon/Fenrir, F for Kore/Zephyr) in the Voice Narration Settings modal.
+- `EditorView`: Manages presentation state and editing. Implements a `previewCacheRef` and background pre-fetching logic to ensure voice samples play instantly when triggered.
+- `PresenterView`: A specialized view for presenters. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides, now with support for per-slide voice overrides.
+- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** and **Image Resizing**.
+- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement.
+- `types.ts`: Schema definitions for `FloatingElement`, `Slide`, and `Presentation`.
 - `demo/index.ts`: Sample presentation data enhanced with **Speaker Notes**.
 - `vite-env.d.ts`: Shorthand module declarations for asset resolution.
 
@@ -28,20 +28,17 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ### UI/UX: Generation & Refinement
 - **Global Refinement Mode:** Users can refine an entire presentation instead of starting over.
-- **Toggle Mechanism:** An "Edit Mode" button in the header activates specialized editing tools (only visible when a slideshow is active).
 - **Voice Editing Modal:** A dedicated modal allows users to manage narration voices.
   - **Global Voice:** Apply a single voice to the entire presentation.
-  - **Slide Overrides:** Assign specific voices (Puck, Charon, Kore, Fenrir, Zephyr) to individual slides.
-  - **Voice Preview:** Next to each voice selection, a "Play" icon allows users to hear a live sample generated via the Gemini TTS service.
-  - **Cache Invalidation:** Changing a voice (globally or per-slide) invalidates the `audioCacheRef` in `PresenterView`, forcing a fresh TTS generation during playback.
+  - **Slide Overrides:** Assign specific voices to individual slides.
+  - **Voice Metadata:** Displays gender indicators (M/F) for all available voices.
+  - **Instant Preview:** When the modal opens, it pre-fetches sample audio for all voices. Clicking the preview button plays the cached audio instantly.
 - **Slide Reordering:** HTML5 Drag and Drop support in the slide outline.
-- **Floating Elements:** Independent text and image elements with percentage positioning.
 
 ### Presenter Mode & Auto-Play (High Performance)
 - **Mechanism:** Uses the browser's Fullscreen API.
 - **Auto-Play Logic:** Narration using Gemini TTS.
   - **Audio Caching & Prefetching:** Implements slide-id based caching that respects both `notes` and `voiceName`.
-  - **Notes Sync:** Auto-scrolls speaker notes in sync with audio playback.
 - **Audio Processing:** Implements a raw PCM decoder for Gemini TTS output.
 
 ### Grounded Content Generation
