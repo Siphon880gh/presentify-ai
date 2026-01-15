@@ -409,7 +409,7 @@ const EditorView: React.FC = () => {
           const isLeft = slide.layout === SlideLayout.IMAGE_LEFT;
           const imgConfig: any = { 
             x: isLeft ? 0.5 : 5.5, 
-            y: 1.5, 
+            y: 1.75, 
             w: 4, 
             h: 3,
             ...(slide.imageUrl.startsWith('data:') ? { data: slide.imageUrl } : { path: slide.imageUrl })
@@ -419,7 +419,7 @@ const EditorView: React.FC = () => {
           contentW = '45%';
         }
         
-        pSlide.addText(cleanContent, { x: contentX, y: 1.5, w: contentW, fontSize: 18, color: '444444' });
+        pSlide.addText(cleanContent, { x: contentX, y: 1.75, w: contentW, fontSize: 18, color: '444444' });
       }
       
       if (slide.notes) {
