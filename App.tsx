@@ -15,6 +15,13 @@ const STORAGE_LIBRARY = 'presentify_library'; // List of saved presentation meta
 const STORAGE_PRES_PREFIX = 'presentify_pres_'; // Prefix for saved presentations (no images)
 const STORAGE_IMG_PREFIX = 'presentify_img_'; // Prefix for individual images
 
+// Wizard Topic Interface
+interface WizardTopic {
+  id: string;
+  title: string;
+  detail: string;
+}
+
 // Storage helpers
 interface SavedPresentationMeta {
   id: string;
@@ -96,6 +103,13 @@ const EditorView: React.FC = () => {
   const [saveName, setSaveName] = useState('');
   const [savedLibrary, setSavedLibrary] = useState<SavedPresentationMeta[]>([]);
   const [isFullscreenPresenting, setIsFullscreenPresenting] = useState(false);
+
+  // Wizard state
+  const [showWizardDropdown, setShowWizardDropdown] = useState(false);
+  const [showPromptWizard, setShowPromptWizard] = useState(false);
+  const [wizardPrompt, setWizardPrompt] = useState('');
+  const [wizardSlideCount, setWizardSlideCount] = useState(8);
+  const [wizardTopics, setWizardTopics] = useState<WizardTopic[]>([]);
   
   const isExpanded = isPromptFocused && prompt.length >= 33;
   const exportContainerRef = useRef<HTMLDivElement>(null);
@@ -109,16 +123,20 @@ const EditorView: React.FC = () => {
     }
   }, [prompt]);
 
-  // Close export menu on click outside
+  // Close dropdowns on click outside
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (showExportMenu && !(e.target as Element).closest('.export-menu-container')) {
+      const target = e.target as Element;
+      if (showExportMenu && !target.closest('.export-menu-container')) {
         setShowExportMenu(false);
+      }
+      if (showWizardDropdown && !target.closest('.wizard-dropdown-container')) {
+        setShowWizardDropdown(false);
       }
     };
     window.addEventListener('mousedown', handleOutsideClick);
     return () => window.removeEventListener('mousedown', handleOutsideClick);
-  }, [showExportMenu]);
+  }, [showExportMenu, showWizardDropdown]);
 
   // Load from localStorage on mount (current session only, for presenter sync)
   useEffect(() => {
@@ -284,8 +302,8 @@ const EditorView: React.FC = () => {
     setShowOpenModal(true);
   }, []);
 
-  const handleGenerate = async (useHeaderPrompt = true) => {
-    const targetPrompt = useHeaderPrompt ? prompt : (presentation?.title || prompt);
+  const handleGenerate = async (useHeaderPrompt = true, overridePrompt?: string) => {
+    const targetPrompt = overridePrompt || (useHeaderPrompt ? prompt : (presentation?.title || prompt));
     if (!targetPrompt.trim()) return;
     setIsGenerating(true);
     setStatusMessage('Generating presentation structure...');
@@ -336,6 +354,55 @@ const EditorView: React.FC = () => {
     } finally {
       setStatusMessage('');
     }
+  };
+
+  const openWizard = () => {
+    setWizardPrompt(prompt);
+    setShowPromptWizard(true);
+    setShowWizardDropdown(false);
+  };
+
+  const resetWizard = () => {
+    setWizardPrompt('');
+    setWizardSlideCount(8);
+    setWizardTopics([]);
+  };
+
+  const addWizardTopic = () => {
+    const newTopic: WizardTopic = {
+      id: Math.random().toString(36).substr(2, 9),
+      title: '',
+      detail: ''
+    };
+    setWizardTopics([...wizardTopics, newTopic]);
+  };
+
+  const updateWizardTopic = (id: string, field: keyof WizardTopic, value: string) => {
+    setWizardTopics(wizardTopics.map(t => t.id === id ? { ...t, [field]: value } : t));
+  };
+
+  const moveWizardTopic = (index: number, direction: 'up' | 'down') => {
+    const newTopics = [...wizardTopics];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newTopics.length) return;
+    [newTopics[index], newTopics[targetIndex]] = [newTopics[targetIndex], newTopics[index]];
+    setWizardTopics(newTopics);
+  };
+
+  const removeWizardTopic = (id: string) => {
+    setWizardTopics(wizardTopics.filter(t => t.id !== id));
+  };
+
+  const handleWizardSubmit = () => {
+    let finalPrompt = `Topic: ${wizardPrompt}\nSlide Count: ${wizardSlideCount}\n`;
+    if (wizardTopics.length > 0) {
+      finalPrompt += `Specific Structure & Order:\n`;
+      wizardTopics.forEach((t, i) => {
+        finalPrompt += `${i + 1}. ${t.title}: ${t.detail}\n`;
+      });
+    }
+    handleGenerate(false, finalPrompt);
+    setShowPromptWizard(false);
   };
 
   const handleLoadDemo = () => {
@@ -693,8 +760,8 @@ const EditorView: React.FC = () => {
               ref={promptRef}
               rows={1}
               placeholder="Enter a new topic for a full slideshow..."
-              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2.5 px-6 pr-24 transition-all outline-none resize-none overflow-hidden"
-              style={{ minHeight: '34px', maxHeight: '60px' }}
+              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2.5 px-6 pr-32 transition-all outline-none resize-none overflow-hidden"
+              style={{ minHeight: '34px', maxHeight: '160px' }}
               value={prompt}
               onFocus={() => setIsPromptFocused(true)}
               onBlur={() => setIsPromptFocused(false)}
@@ -706,14 +773,40 @@ const EditorView: React.FC = () => {
                 }
               }}
             />
-            <button 
-              onClick={() => handleGenerate(true)}
-              disabled={isGenerating}
-              className="absolute right-2 h-8 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-full text-sm font-medium transition-colors"
-              style={{top: "50%", transform: "translateY(-50%)"}}
-            >
-              {isGenerating ? '...' : 'Create'}
-            </button>
+            <div className="absolute right-1 bottom-1.5 flex items-center wizard-dropdown-container">
+              <button 
+                onClick={() => handleGenerate(true)}
+                disabled={isGenerating}
+                className="h-8 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-l-full text-sm font-medium transition-colors border-r border-indigo-500"
+              >
+                {isGenerating ? '...' : 'Create'}
+              </button>
+              <button 
+                onClick={() => setShowWizardDropdown(!showWizardDropdown)}
+                disabled={isGenerating}
+                className="h-8 px-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-r-full text-sm font-medium transition-colors"
+              >
+                <svg className={`w-4 h-4 transition-transform duration-200 ${showWizardDropdown ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              {showWizardDropdown && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] p-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button 
+                    onClick={openWizard}
+                    className="w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-indigo-50 rounded-lg transition-colors group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-bold text-slate-800">Prompt Wizard</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <button 
             onClick={handleLoadDemo}
@@ -1030,6 +1123,161 @@ const EditorView: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Prompt Wizard Modal */}
+      {showPromptWizard && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-3xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in slide-in-from-bottom-4 duration-400">
+            <div className="p-6 border-b flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 leading-tight">Prompt Wizard</h3>
+                  <p className="text-xs text-slate-500">Fine-tune your presentation structure</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPromptWizard(false)} 
+                className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+              <section className="space-y-3">
+                <label className="text-sm font-bold text-slate-700 uppercase tracking-widest">Main Topic / Context</label>
+                <textarea
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-2xl p-4 text-sm outline-none transition-all h-32 resize-none font-medium text-slate-700 shadow-inner"
+                  placeholder="What is this presentation about?"
+                  value={wizardPrompt}
+                  onChange={(e) => setWizardPrompt(e.target.value)}
+                />
+              </section>
+
+              <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <label className="text-sm font-bold text-slate-700 uppercase tracking-widest">Slide Count</label>
+                  <div className="flex items-center space-x-4">
+                    <input 
+                      type="range" 
+                      min="3" 
+                      max="20" 
+                      value={wizardSlideCount}
+                      onChange={(e) => setWizardSlideCount(parseInt(e.target.value))}
+                      className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                    <span className="w-12 h-10 bg-indigo-50 text-indigo-700 rounded-xl flex items-center justify-center font-bold text-lg border border-indigo-100">{wizardSlideCount}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 italic">Recommended: 8-12 slides for impact</p>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-slate-700 uppercase tracking-widest">Specific Topics & Order</label>
+                  <button 
+                    onClick={addWizardTopic}
+                    className="flex items-center space-x-2 text-indigo-600 hover:text-indigo-700 font-bold text-xs bg-indigo-50 px-3 py-2 rounded-lg transition-all"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Add Specific Slide Topic</span>
+                  </button>
+                </div>
+                
+                {wizardTopics.length === 0 ? (
+                  <div className="p-8 border-2 border-dashed border-slate-200 rounded-3xl text-center">
+                    <p className="text-slate-400 text-sm font-medium">No specific structure defined. AI will choose the best flow.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {wizardTopics.map((topic, index) => (
+                      <div key={topic.id} className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-start space-x-4 animate-in slide-in-from-right-2 duration-300">
+                        <div className="flex flex-col items-center space-y-2 mt-1 shrink-0">
+                          <button 
+                            onClick={() => moveWizardTopic(index, 'up')}
+                            disabled={index === 0}
+                            className="p-1 hover:bg-slate-100 disabled:opacity-20 rounded text-slate-400"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                          </button>
+                          <span className="text-xs font-black text-slate-300 w-5 text-center">{index + 1}</span>
+                          <button 
+                            onClick={() => moveWizardTopic(index, 'down')}
+                            disabled={index === wizardTopics.length - 1}
+                            className="p-1 hover:bg-slate-100 disabled:opacity-20 rounded text-slate-400"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                        </div>
+                        <div className="flex-1 space-y-3">
+                          <input 
+                            type="text"
+                            placeholder="Slide Title / Main Point"
+                            className="w-full bg-transparent border-none text-slate-800 font-bold placeholder:text-slate-300 focus:ring-0 p-0"
+                            value={topic.title}
+                            onChange={(e) => updateWizardTopic(topic.id, 'title', e.target.value)}
+                          />
+                          <input 
+                            type="text"
+                            placeholder="Key details, stats, or specific focus for this slide..."
+                            className="w-full bg-slate-50 border-none text-xs text-slate-500 placeholder:text-slate-300 focus:ring-1 focus:ring-indigo-100 rounded-lg px-3 py-2"
+                            value={topic.detail}
+                            onChange={(e) => updateWizardTopic(topic.id, 'detail', e.target.value)}
+                          />
+                        </div>
+                        <button 
+                          onClick={() => removeWizardTopic(topic.id)}
+                          className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all self-center"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 flex items-center justify-between">
+              <button 
+                onClick={resetWizard}
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-slate-400 hover:text-red-500 transition-all group"
+              >
+                <svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357-2m15.357 2H15" />
+                </svg>
+                <span>Reset Wizard</span>
+              </button>
+              <div className="flex items-center space-x-3">
+                <button 
+                  onClick={() => setShowPromptWizard(false)} 
+                  className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleWizardSubmit} 
+                  disabled={!wizardPrompt.trim() || isGenerating}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 disabled:shadow-none"
+                >
+                  {isGenerating ? 'Generating...' : 'Generate Full Slideshow'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Off-screen stable container for PDF capture */}
       <div 

@@ -16,7 +16,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ## 2. File Tree & Roles
 - `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header.
-- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** that smoothly grows to full width (`max-w-full`), hiding side elements (logo, demo button, action menu) when input length ≥ 33 characters and focused.
+- `EditorView`: Manages presentation state, slide navigation, drag-and-drop reordering, and library management. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure generation.
 - `PresenterView`: A specialized view for presenters with slide previews and speaker notes.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output and the `RichTextEditor`.
 - `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation.
@@ -24,10 +24,15 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ## 3. Architecture & Code Flow
 
-### UI/UX: Prompt Field Expansion
-- **Mechanism:** Monitors `prompt.length` and focus state via `isPromptFocused`.
-- **Expansion Logic:** If `length >= 33` and field is focused, the prompt container expands to `max-w-full` while siblings (Logo, Demo, Actions) shrink to `max-w-0` and fade out.
-- **Animation:** Uses Tailwind's `transition-all duration-300 ease-out` for a smooth, fast animated transition.
+### UI/UX: Prompt Field & Wizard
+- **Prompt Field:** Monitors `prompt.length` and focus state via `isPromptFocused`. Expands to `max-w-full` when focused with ≥ 33 chars.
+- **Split Button:** The "Create" button features a split dropdown chevron.
+- **Prompt Wizard:** A comprehensive modal allowing users to:
+  - Input a detailed multiline context.
+  - Choose specific slide counts (3-20).
+  - Define an ordered list of topics with specific sub-details for each slide.
+  - Sync prompt text between header and wizard automatically.
+  - Reset wizard state to clear custom structure.
 
 ### Presenter Mode (Fullscreen)
 - **Mechanism:** Uses the browser's Fullscreen API. Controls appear on hover at the bottom.
