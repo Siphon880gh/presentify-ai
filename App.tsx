@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Presentation, Slide, SlideLayout, SlideTransition } from './types';
@@ -419,7 +420,13 @@ const EditorView: React.FC = () => {
           contentW = '45%';
         }
         
-        pSlide.addText(cleanContent, { x: contentX, y: 1.75, w: contentW, fontSize: 18, color: '444444' });
+        // Fix: Provide an array of text objects with the bullet option enabled
+        const bulletObjects = slide.content.map(text => ({
+          text: text.replace(/<[^>]*>/g, ''),
+          options: { bullet: true, fontSize: 18, color: '444444' }
+        }));
+        
+        pSlide.addText(bulletObjects, { x: contentX, y: 1.75, w: contentW });
       }
       
       if (slide.notes) {
