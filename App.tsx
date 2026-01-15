@@ -90,6 +90,32 @@ const saveToLibrary = (meta: SavedPresentationMeta) => {
   localStorage.setItem(STORAGE_LIBRARY, JSON.stringify(library));
 };
 
+const TooltipButton: React.FC<{
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}> = ({ onClick, title, children, className }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative flex flex-col items-center">
+      <button
+        onClick={onClick}
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        className={className || "p-2 text-slate-400 hover:text-indigo-600 transition-colors"}
+      >
+        {children}
+      </button>
+      {show && (
+        <div className="absolute top-full mt-2 px-2 py-1 bg-slate-800 text-white text-[10px] font-bold rounded shadow-lg whitespace-nowrap z-[100] animate-in fade-in zoom-in-95 duration-150">
+          {title}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const EditorView: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [isPromptFocused, setIsPromptFocused] = useState(false);
@@ -469,28 +495,33 @@ const EditorView: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
-          <button 
+          <TooltipButton
             onClick={handleLoadDemo}
-            className="p-2 text-slate-400 hover:text-indigo-600 transition-colors" 
             title="Load Demo"
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          </button>
+          </TooltipButton>
 
-          <button onClick={() => { setSavedLibrary(getLibrary()); setShowOpenModal(true); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors" title="Open Presentation">
+          <TooltipButton 
+            onClick={() => { setSavedLibrary(getLibrary()); setShowOpenModal(true); }} 
+            title="Open Presentation"
+          >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" strokeWidth={2}/></svg>
-          </button>
+          </TooltipButton>
           
           {presentation && (
             <>
-              <button onClick={() => { setSaveName(presentation.title); setShowSaveModal(true); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors" title="Save">
+              <TooltipButton 
+                onClick={() => { setSaveName(presentation.title); setShowSaveModal(true); }} 
+                title="Save to Library"
+              >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" strokeWidth={2}/></svg>
-              </button>
+              </TooltipButton>
               
-              <div className="relative export-menu-container">
-                <button onClick={() => setShowExportMenu(!showExportMenu)} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors" title="Export">
+              <div className="relative export-menu-container flex flex-col items-center">
+                <TooltipButton onClick={() => setShowExportMenu(!showExportMenu)} title="Export Slides">
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
-                </button>
+                </TooltipButton>
                 {showExportMenu && (
                   <div className="absolute top-full right-0 mt-2 w-48 bg-white border rounded-xl shadow-2xl z-[100] p-1.5">
                     <button onClick={handleExportPDF} className="w-full p-3 hover:bg-slate-50 rounded-lg text-left text-xs font-bold">Export as PDF</button>
@@ -499,7 +530,7 @@ const EditorView: React.FC = () => {
                 )}
               </div>
 
-              <button onClick={openPresenterMode} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center space-x-2">
+              <button onClick={openPresenterMode} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center space-x-2 ml-2">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeWidth={2}/></svg>
                 <span>Present</span>
               </button>
@@ -691,14 +722,27 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                 </div>
                 <p className="text-[10px] text-slate-400">Supported: .md, .txt, .pdf, .docx, .csv, images</p>
                 {uploadError && <p className="text-[10px] text-red-500 font-bold bg-red-50 p-2 rounded-lg border border-red-100">{uploadError}</p>}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200 min-h-[100px]">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200 min-h-[80px]">
                   {files.map((f: any) => <div key={f.id} className="text-[10px] bg-white border rounded-lg px-2 py-1 mb-1 truncate flex items-center justify-between">{f.name} <button onClick={() => setFiles(files.filter((file: any) => file.id !== f.id))} className="text-red-400 ml-2">×</button></div>)}
                   {isParsing && <p className="text-[10px] animate-pulse">Parsing...</p>}
-                  {files.length === 0 && !isParsing && <p className="text-[10px] text-slate-300 text-center mt-8">No files uploaded</p>}
+                  {files.length === 0 && !isParsing && <p className="text-[10px] text-slate-300 text-center mt-4">No files uploaded</p>}
                 </div>
-                <div className="flex space-x-2">
-                  <input type="text" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://..." className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-2 text-xs outline-none" />
-                  <button onClick={() => { if (urlInput) { setUrls([...urls, urlInput]); setUrlInput(''); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Add</button>
+                
+                <div className="space-y-2">
+                  <div className="flex space-x-2">
+                    <input type="text" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://..." className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-2 text-xs outline-none" />
+                    <button onClick={() => { if (urlInput) { setUrls([...urls, urlInput]); setUrlInput(''); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Add URL</button>
+                  </div>
+                  {urls.length > 0 && (
+                    <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100 space-y-1.5 max-h-[120px] overflow-y-auto custom-scrollbar">
+                      {urls.map((url: string, i: number) => (
+                        <div key={i} className="flex items-center justify-between bg-white px-2 py-1 rounded-lg border border-indigo-50">
+                          <span className="text-[10px] text-indigo-600 truncate flex-1 mr-2">{url}</span>
+                          <button onClick={() => setUrls(urls.filter((_: any, idx: number) => idx !== i))} className="text-red-400 hover:text-red-600 font-bold text-sm">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -736,7 +780,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Slide Focus (Rearrange with drag)</label>
                   <button onClick={addTopic} className="text-indigo-600 text-[10px] font-black uppercase hover:underline">Add New</button>
                 </div>
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
                   {topics.map((t: any, index: number) => (
                     <div 
                       key={t.id} 
