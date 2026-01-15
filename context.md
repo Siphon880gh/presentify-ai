@@ -1,4 +1,3 @@
-
 # Presentify AI - Project Context
 
 > [!NOTE]
@@ -19,9 +18,9 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization.
 - `EditorView`: Manages presentation state, slide navigation, library management, and **Advanced Edit Mode** toggling. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
 - `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Now includes an **Auto-Play** mode that uses TTS to read notes and advance slides.
-- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images).
+- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images) and **Image Resizing**.
 - `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement via `refineSlide`.
-- `types.ts`: Schema definitions, now including `FloatingElement` and updated `Slide` schema.
+- `types.ts`: Schema definitions, now including `FloatingElement` and updated `Slide` schema with dimension support.
 - `demo/index.ts`: Sample presentation data.
 
 ## 3. Architecture & Code Flow
@@ -35,6 +34,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
   - **Images:** Can be added via direct URL or generated on-the-fly via AI prompts.
   - **Draggable:** Elements use percentage-based positioning (`x`, `y`) to remain responsive and can be repositioned within the slide bounds during Edit Mode.
   - **Snapping & Guides:** Dragging floating elements includes a **snap-to-center** feature (threshold of 1.5%) with visible horizontal/vertical alignment guides for professional layout precision.
+- **Image Resizing:** All images (layout-generated and floating) feature a **resize handle** at the bottom-right corner in Edit Mode. Users can drag this handle to interactively scale images, with dimensions saved to the slide state.
 - **Improved Workflow:** To maximize focus, "Add Image" and "Regeneration" modals close immediately upon action confirmation (e.g., clicking "Add" or "Generate"). AI-driven actions then show a global "Generating..." status overlay.
 
 ### UI/UX: Prompt Field & Wizard

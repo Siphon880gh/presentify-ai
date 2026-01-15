@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Slide, SlideLayout, SlideTransition, FloatingElement } from '../types';
 
@@ -288,9 +287,12 @@ const RichTextEditor: React.FC<{
 const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive, onRegenerateImage, isImageLoading, transitionType = SlideTransition.FADE, disableTransitions = false, isEditMode = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [resizingId, setResizingId] = useState<string | null>(null);
   const [showVGuide, setShowVGuide] = useState(false);
   const [showHGuide, setShowHGuide] = useState(false);
   const dragStartOffset = useRef({ x: 0, y: 0 });
+  const resizeStartPos = useRef({ x: 0, y: 0 });
+  const resizeStartSize = useRef({ w: 0, h: 0 });
 
   const handleFieldChange = (field: keyof Slide, value: any) => {
     onUpdate({ ...slide, [field]: value });
@@ -310,7 +312,6 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
     handleFieldChange('content', newContent);
   };
 
-  // Dragging logic for floating elements
   const onFloatingMouseDown = (e: React.MouseEvent, elId: string) => {
     if (!isEditMode) return;
     e.stopPropagation();
@@ -325,43 +326,78 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
     };
   };
 
+  const onResizeMouseDown = (e: React.MouseEvent, id: string) => {
+    if (!isEditMode) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setResizingId(id);
+    resizeStartPos.current = { x: e.clientX, y: e.clientY };
+    
+    const target = e.currentTarget.parentElement;
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      resizeStartSize.current = { w: rect.width, h: rect.height };
+    }
+  };
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!draggingId || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      let newX = ((e.clientX - rect.left - dragStartOffset.current.x) / rect.width) * 100;
-      let newY = ((e.clientY - rect.top - dragStartOffset.current.y) / rect.height) * 100;
-      
-      // Snap-to guides (Center 50%)
-      const snapThreshold = 1.5; // percentage points
-      let vSnap = false;
-      let hSnap = false;
+      if (!containerRef.current) return;
 
-      if (Math.abs(newX - 50) < snapThreshold) {
-        newX = 50;
-        vSnap = true;
+      if (resizingId) {
+        const deltaX = e.clientX - resizeStartPos.current.x;
+        const deltaY = e.clientY - resizeStartPos.current.y;
+        const newW = resizeStartSize.current.w + deltaX;
+        const newH = resizeStartSize.current.h + deltaY;
+
+        if (resizingId === 'layout-image') {
+          handleFieldChange('imageWidth', Math.max(50, newW));
+          handleFieldChange('imageHeight', Math.max(50, newH));
+        } else {
+          const updatedElements = slide.floatingElements?.map(el => 
+            el.id === resizingId ? { ...el, width: Math.max(50, newW), height: Math.max(50, newH) } : el
+          );
+          handleFieldChange('floatingElements', updatedElements);
+        }
+        return;
       }
-      if (Math.abs(newY - 50) < snapThreshold) {
-        newY = 50;
-        hSnap = true;
+
+      if (draggingId) {
+        const rect = containerRef.current.getBoundingClientRect();
+        let newX = ((e.clientX - rect.left - dragStartOffset.current.x) / rect.width) * 100;
+        let newY = ((e.clientY - rect.top - dragStartOffset.current.y) / rect.height) * 100;
+        
+        const snapThreshold = 1.5;
+        let vSnap = false;
+        let hSnap = false;
+
+        if (Math.abs(newX - 50) < snapThreshold) {
+          newX = 50;
+          vSnap = true;
+        }
+        if (Math.abs(newY - 50) < snapThreshold) {
+          newY = 50;
+          hSnap = true;
+        }
+
+        setShowVGuide(vSnap);
+        setShowHGuide(hSnap);
+
+        const updatedElements = slide.floatingElements?.map(el => 
+          el.id === draggingId ? { ...el, x: Math.max(0, Math.min(100, newX)), y: Math.max(0, Math.min(100, newY)) } : el
+        );
+        handleFieldChange('floatingElements', updatedElements);
       }
-
-      setShowVGuide(vSnap);
-      setShowHGuide(hSnap);
-
-      const updatedElements = slide.floatingElements?.map(el => 
-        el.id === draggingId ? { ...el, x: Math.max(0, Math.min(100, newX)), y: Math.max(0, Math.min(100, newY)) } : el
-      );
-      handleFieldChange('floatingElements', updatedElements);
     };
 
     const handleMouseUp = () => {
       setDraggingId(null);
+      setResizingId(null);
       setShowVGuide(false);
       setShowHGuide(false);
     };
 
-    if (draggingId) {
+    if (draggingId || resizingId) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
@@ -369,16 +405,36 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingId, slide.floatingElements]);
+  }, [draggingId, resizingId, slide.floatingElements]);
 
   const removeFloatingElement = (id: string) => {
     const updated = slide.floatingElements?.filter(f => f.id !== id);
     handleFieldChange('floatingElements', updated);
   };
 
+  const ResizeHandle = ({ id }: { id: string }) => (
+    isEditMode ? (
+      <div 
+        className="absolute bottom-0 right-0 w-6 h-6 bg-indigo-600/90 cursor-nwse-resize z-[100] rounded-tl-xl flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95"
+        onMouseDown={(e) => onResizeMouseDown(e, id)}
+      >
+        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+          <path d="M19 19H5M19 19v-14" />
+        </svg>
+      </div>
+    ) : null
+  );
+
   const ImageComponent = () => (
     <div className="bg-gray-100 rounded-xl overflow-hidden flex flex-col relative shadow-inner group h-full">
-      <div className="relative flex-1 min-h-0 bg-slate-200 flex items-center justify-center">
+      <div 
+        className="relative flex-1 min-h-0 bg-slate-200 flex items-center justify-center"
+        style={{
+          width: slide.imageWidth ? `${slide.imageWidth}px` : '100%',
+          height: slide.imageHeight ? `${slide.imageHeight}px` : '100%',
+          margin: '0 auto'
+        }}
+      >
         {isImageLoading ? (
           <div className="absolute inset-0 bg-slate-100/80 flex items-center justify-center z-10">
             <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -387,6 +443,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
           <button onClick={onRegenerateImage} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-semibold z-20"><div className="flex flex-col items-center"><svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span>Regenerate Image</span></div></button>
         )}
         {slide.imageUrl ? (<img src={slide.imageUrl} alt={slide.title} className="w-full h-full object-cover" />) : (<div className="flex flex-col items-center text-slate-400"><svg className="w-12 h-12 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Loading AI Visual...</span></div>)}
+        <ResizeHandle id="layout-image" />
       </div>
       <div className="bg-white border-t p-3 shrink-0"><div className="flex items-center space-x-1 mb-1"><svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Prompt</span></div><div contentEditable suppressContentEditableWarning onBlur={(e) => handleFieldChange('imagePrompt', e.currentTarget.innerText)} className="text-[11px] text-slate-500 italic focus:outline-none focus:ring-1 focus:ring-indigo-500/30 rounded p-1.5 bg-slate-50 border border-transparent hover:border-slate-200 transition-all cursor-text min-h-[3em]">{slide.imagePrompt || ''}</div></div>
     </div>
@@ -423,7 +480,6 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
     >
       {renderContent()}
       
-      {/* Alignment Guides */}
       {isEditMode && showVGuide && (
         <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-indigo-500/50 z-[100] pointer-events-none" />
       )}
@@ -431,7 +487,6 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
         <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-indigo-500/50 z-[100] pointer-events-none" />
       )}
 
-      {/* Floating Elements Rendering */}
       {slide.floatingElements?.map((el) => (
         <div 
           key={el.id}
@@ -441,6 +496,8 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
             top: `${el.y}%`,
             transform: 'translate(-50%, -50%)',
             zIndex: 40,
+            width: el.width ? `${el.width}px` : 'auto',
+            height: el.height ? `${el.height}px` : 'auto',
           }}
           className={`group/floating ${isEditMode ? 'hover:ring-2 hover:ring-indigo-400 p-2 rounded' : ''}`}
         >
@@ -472,7 +529,10 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
               isFloating={true}
             />
           ) : (
-            <img src={el.content} alt="floating" className="max-w-[300px] max-h-[300px] object-contain shadow-xl rounded-lg" />
+            <div className="relative w-full h-full">
+              <img src={el.content} alt="floating" className="w-full h-full object-contain shadow-xl rounded-lg" />
+              <ResizeHandle id={el.id} />
+            </div>
           )}
         </div>
       ))}

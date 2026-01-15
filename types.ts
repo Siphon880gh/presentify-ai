@@ -1,4 +1,3 @@
-
 export enum SlideLayout {
   TITLE = 'TITLE',
   BULLETS = 'BULLETS',
@@ -32,6 +31,8 @@ export interface Slide {
   layout: SlideLayout;
   imagePrompt?: string;
   imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
   transitionType?: SlideTransition;
   notes?: string;
   floatingElements?: FloatingElement[];
