@@ -28,12 +28,13 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 
 ### UI/UX: Edit Mode & Canvas Editing
 - **Toggle Mechanism:** An "Edit Mode" button in the header activates specialized editing tools.
-- **Slide Reordering:** When in Edit Mode, the slide outline in the `Aside` becomes draggable (HTML5 Drag and Drop API), allowing users to re-sequence slides instantly.
+- **Slide Reordering:** When in Edit Mode, the slide outline in the `Aside` becomes draggable (HTML5 Drag and Drop API), allowing users to re-sequence slides instantly. A **blue horizontal insert indicator** appears during drag-over to show exactly where the slide will land.
 - **Single Slide Regeneration:** A floating toolbar in the editor allows users to regenerate the active slide with a custom AI prompt, leveraging the `refineSlide` service for targeted updates.
 - **Floating Elements:** Users can add independent text and image elements to any slide. 
   - **Text:** Uses the `RichTextEditor` for consistent styling.
   - **Images:** Can be added via direct URL or generated on-the-fly via AI prompts.
   - **Draggable:** Elements use percentage-based positioning (`x`, `y`) to remain responsive and can be repositioned within the slide bounds during Edit Mode.
+  - **Snapping & Guides:** Dragging floating elements includes a **snap-to-center** feature (threshold of 1.5%) with visible horizontal/vertical alignment guides for professional layout precision.
 
 ### UI/UX: Prompt Field & Wizard
 - **Layout Stability:** The header uses fixed-width side containers for the logo (left) and button group (right) to prevent the center prompt from shifting horizontally when buttons animate their inline labels.

@@ -176,7 +176,7 @@ const EditorView: React.FC = () => {
 
   // Drag handles for outline
   const slideDragItem = useRef<number | null>(null);
-  const slideDragOverItem = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Wizard state
   const [wizardPrompt, setWizardPrompt] = useState('');
@@ -503,24 +503,24 @@ const EditorView: React.FC = () => {
 
   // Slide Reordering Handlers
   const handleSlideDragStart = (index: number) => { slideDragItem.current = index; };
-  const handleSlideDragOver = (index: number) => { slideDragOverItem.current = index; };
+  const handleSlideDragOver = (index: number) => { setDragOverIndex(index); };
   const handleSlideDragEnd = () => {
-    if (slideDragItem.current !== null && slideDragOverItem.current !== null && presentation) {
+    if (slideDragItem.current !== null && dragOverIndex !== null && presentation) {
       const copy = [...presentation.slides];
       const draggedItemContent = copy[slideDragItem.current];
       copy.splice(slideDragItem.current, 1);
-      copy.splice(slideDragOverItem.current, 0, draggedItemContent);
+      copy.splice(dragOverIndex, 0, draggedItemContent);
       setPresentation({ ...presentation, slides: copy });
       if (currentSlideIndex === slideDragItem.current) {
-        setCurrentSlideIndex(slideDragOverItem.current);
-      } else if (currentSlideIndex > slideDragItem.current && currentSlideIndex <= slideDragOverItem.current) {
+        setCurrentSlideIndex(dragOverIndex);
+      } else if (currentSlideIndex > slideDragItem.current && currentSlideIndex <= dragOverIndex) {
         setCurrentSlideIndex(currentSlideIndex - 1);
-      } else if (currentSlideIndex < slideDragItem.current && currentSlideIndex >= slideDragOverItem.current) {
+      } else if (currentSlideIndex < slideDragItem.current && currentSlideIndex >= dragOverIndex) {
         setCurrentSlideIndex(currentSlideIndex + 1);
       }
-      slideDragItem.current = null;
-      slideDragOverItem.current = null;
     }
+    slideDragItem.current = null;
+    setDragOverIndex(null);
   };
 
   // Floating Element Management
@@ -687,24 +687,31 @@ const EditorView: React.FC = () => {
               <svg className={`w-5 h-5 transition-transform ${isOutlineCollapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M11 19l-7-7 7-7m8 14l-7-7 7-7" strokeWidth={2}/></svg>
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 relative" onMouseLeave={() => setDragOverIndex(null)}>
             {presentation?.slides.map((s, i) => (
-              <button 
-                key={s.id} 
-                draggable={isEditMode}
-                onDragStart={() => handleSlideDragStart(i)}
-                onDragOver={(e) => { e.preventDefault(); handleSlideDragOver(i); }}
-                onDragEnd={handleSlideDragEnd}
-                onClick={() => setCurrentSlideIndex(i)} 
-                className={`w-full flex items-center p-2 rounded-lg text-left transition-all ${currentSlideIndex === i ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-slate-50 text-slate-600'} ${isEditMode ? 'cursor-grab active:cursor-grabbing' : ''}`}
-              >
-                <span className="w-5 text-xs opacity-30 font-mono">{i + 1}</span>
-                <span className="truncate text-xs flex-1">{s.title.replace(/<[^>]*>/g, '') || 'Untitled Slide'}</span>
-                {isEditMode && (
-                  <svg className="w-3 h-3 text-slate-300 opacity-50 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M7 15h10v2H7zm0-4h10v2H7zm0-4h10v2H7z"/></svg>
+              <React.Fragment key={s.id}>
+                {dragOverIndex === i && dragOverIndex !== slideDragItem.current && (
+                  <div className="h-1 bg-indigo-500 rounded-full my-1 animate-pulse" />
                 )}
-              </button>
+                <button 
+                  draggable={isEditMode}
+                  onDragStart={() => handleSlideDragStart(i)}
+                  onDragOver={(e) => { e.preventDefault(); handleSlideDragOver(i); }}
+                  onDragEnd={handleSlideDragEnd}
+                  onClick={() => setCurrentSlideIndex(i)} 
+                  className={`w-full flex items-center p-2 rounded-lg text-left transition-all ${currentSlideIndex === i ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-slate-50 text-slate-600'} ${isEditMode ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                >
+                  <span className="w-5 text-xs opacity-30 font-mono">{i + 1}</span>
+                  <span className="truncate text-xs flex-1">{s.title.replace(/<[^>]*>/g, '') || 'Untitled Slide'}</span>
+                  {isEditMode && (
+                    <svg className="w-3 h-3 text-slate-300 opacity-50 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M7 15h10v2H7zm0-4h10v2H7zm0-4h10v2H7z"/></svg>
+                  )}
+                </button>
+              </React.Fragment>
             ))}
+            {dragOverIndex === presentation?.slides.length && (
+               <div className="h-1 bg-indigo-500 rounded-full my-1 animate-pulse" />
+            )}
           </div>
         </aside>
 

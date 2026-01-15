@@ -288,6 +288,8 @@ const RichTextEditor: React.FC<{
 const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive, onRegenerateImage, isImageLoading, transitionType = SlideTransition.FADE, disableTransitions = false, isEditMode = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [showVGuide, setShowVGuide] = useState(false);
+  const [showHGuide, setShowHGuide] = useState(false);
   const dragStartOffset = useRef({ x: 0, y: 0 });
 
   const handleFieldChange = (field: keyof Slide, value: any) => {
@@ -327,16 +329,37 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
     const handleMouseMove = (e: MouseEvent) => {
       if (!draggingId || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const newX = ((e.clientX - rect.left - dragStartOffset.current.x) / rect.width) * 100;
-      const newY = ((e.clientY - rect.top - dragStartOffset.current.y) / rect.height) * 100;
+      let newX = ((e.clientX - rect.left - dragStartOffset.current.x) / rect.width) * 100;
+      let newY = ((e.clientY - rect.top - dragStartOffset.current.y) / rect.height) * 100;
       
+      // Snap-to guides (Center 50%)
+      const snapThreshold = 1.5; // percentage points
+      let vSnap = false;
+      let hSnap = false;
+
+      if (Math.abs(newX - 50) < snapThreshold) {
+        newX = 50;
+        vSnap = true;
+      }
+      if (Math.abs(newY - 50) < snapThreshold) {
+        newY = 50;
+        hSnap = true;
+      }
+
+      setShowVGuide(vSnap);
+      setShowHGuide(hSnap);
+
       const updatedElements = slide.floatingElements?.map(el => 
         el.id === draggingId ? { ...el, x: Math.max(0, Math.min(100, newX)), y: Math.max(0, Math.min(100, newY)) } : el
       );
       handleFieldChange('floatingElements', updatedElements);
     };
 
-    const handleMouseUp = () => setDraggingId(null);
+    const handleMouseUp = () => {
+      setDraggingId(null);
+      setShowVGuide(false);
+      setShowHGuide(false);
+    };
 
     if (draggingId) {
       window.addEventListener('mousemove', handleMouseMove);
@@ -400,6 +423,14 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
     >
       {renderContent()}
       
+      {/* Alignment Guides */}
+      {isEditMode && showVGuide && (
+        <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-indigo-500/50 z-[100] pointer-events-none" />
+      )}
+      {isEditMode && showHGuide && (
+        <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-indigo-500/50 z-[100] pointer-events-none" />
+      )}
+
       {/* Floating Elements Rendering */}
       {slide.floatingElements?.map((el) => (
         <div 
