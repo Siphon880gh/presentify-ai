@@ -28,13 +28,16 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 ### UI/UX: Edit Mode & Canvas Editing
 - **Toggle Mechanism:** An "Edit Mode" button in the header activates specialized editing tools.
 - **Slide Reordering:** When in Edit Mode, the slide outline in the `Aside` becomes draggable (HTML5 Drag and Drop API), allowing users to re-sequence slides instantly. A **blue horizontal insert indicator** appears during drag-over to show exactly where the slide will land.
+- **Layout Switching:** A "Layout" dropdown in the Edit Mode toolbar allows users to instantly swap the layout of the active slide (e.g., TITLE to IMAGE_LEFT). The content is preserved and re-adapted to the new structural skeleton.
 - **Single Slide Regeneration:** A floating toolbar in the editor allows users to regenerate the active slide with a custom AI prompt, leveraging the `refineSlide` service for targeted updates.
 - **Floating Elements:** Users can add independent text and image elements to any slide. 
   - **Text:** Uses the `RichTextEditor` for consistent styling.
   - **Images:** Can be added via direct URL or generated on-the-fly via AI prompts.
   - **Draggable:** Elements use percentage-based positioning (`x`, `y`) to remain responsive and can be repositioned within the slide bounds during Edit Mode.
   - **Snapping & Guides:** Dragging floating elements includes a **snap-to-center** feature (threshold of 1.5%) with visible horizontal/vertical alignment guides for professional layout precision.
-- **Image Resizing:** All images (layout-generated and floating) feature a **resize handle** at the bottom-right corner in Edit Mode. Users can drag this handle to interactively scale images, with dimensions saved to the slide state.
+- **Image Resizing:** All images (layout-generated and floating) feature a **resize handle** at the bottom-right corner in Edit Mode. 
+  - **Fix (v1.1):** Layout images now utilize a dedicated stacking context (`z-10`) ensuring their resize handles stay *below* floating elements (`z-40`). 
+  - **Fix (v1.1):** Inline JSX for sub-renderers prevents component recreation, stabilizing the resizing interaction.
 - **Improved Workflow:** To maximize focus, "Add Image" and "Regeneration" modals close immediately upon action confirmation (e.g., clicking "Add" or "Generate"). AI-driven actions then show a global "Generating..." status overlay.
 
 ### UI/UX: Prompt Field & Wizard

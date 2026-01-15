@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Presentation, Slide, SlideLayout, SlideTransition, FloatingElement } from './types';
@@ -159,6 +158,7 @@ const EditorView: React.FC = () => {
   const [showWizardDropdown, setShowWizardDropdown] = useState(false);
   const [showPromptWizard, setShowPromptWizard] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -215,10 +215,13 @@ const EditorView: React.FC = () => {
       if (showWizardDropdown && !target.closest('.wizard-dropdown-container')) {
         setShowWizardDropdown(false);
       }
+      if (showLayoutMenu && !target.closest('.layout-menu-container')) {
+        setShowLayoutMenu(false);
+      }
     };
     window.addEventListener('mousedown', handleOutsideClick);
     return () => window.removeEventListener('mousedown', handleOutsideClick);
-  }, [showExportMenu, showWizardDropdown]);
+  }, [showExportMenu, showWizardDropdown, showLayoutMenu]);
 
   // Sync session to storage
   const syncToCurrentStorage = useCallback(() => {
@@ -747,6 +750,29 @@ const EditorView: React.FC = () => {
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeWidth={2}/></svg>
                   <span>+ Image</span>
                </button>
+               <div className="w-px h-4 bg-slate-200" />
+               <div className="relative layout-menu-container">
+                  <button onClick={() => setShowLayoutMenu(!showLayoutMenu)} className="flex items-center space-x-2 text-xs font-bold text-indigo-600 hover:text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-50">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 5h16M4 12h16m-7 7h7" strokeWidth={2}/></svg>
+                    <span>Layout</span>
+                  </button>
+                  {showLayoutMenu && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-40 bg-white border rounded-xl shadow-2xl z-[110] p-1.5 overflow-hidden">
+                      {Object.values(SlideLayout).map((layout) => (
+                        <button
+                          key={layout}
+                          onClick={() => {
+                            updateSlide({ ...activeSlide, layout });
+                            setShowLayoutMenu(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors ${activeSlide.layout === layout ? 'bg-indigo-600 text-white' : 'hover:bg-indigo-50 text-slate-600'}`}
+                        >
+                          {layout.replace('_', ' ')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+               </div>
                <div className="w-px h-4 bg-slate-200" />
                <button onClick={() => setShowRegenModal(true)} className="flex items-center space-x-2 text-xs font-bold text-purple-600 hover:text-purple-700 px-2 py-1 rounded-lg hover:bg-purple-50">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2}/></svg>

@@ -412,7 +412,20 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
     handleFieldChange('floatingElements', updated);
   };
 
-  const ResizeHandle = ({ id }: { id: string }) => (
+  const LayoutResizeHandle = ({ id }: { id: string }) => (
+    isEditMode ? (
+      <div 
+        className="absolute bottom-0 right-0 w-6 h-6 bg-indigo-600/90 cursor-nwse-resize z-[30] rounded-tl-xl flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95"
+        onMouseDown={(e) => onResizeMouseDown(e, id)}
+      >
+        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+          <path d="M19 19H5M19 19v-14" />
+        </svg>
+      </div>
+    ) : null
+  );
+
+  const FloatingResizeHandle = ({ id }: { id: string }) => (
     isEditMode ? (
       <div 
         className="absolute bottom-0 right-0 w-6 h-6 bg-indigo-600/90 cursor-nwse-resize z-[100] rounded-tl-xl flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95"
@@ -426,9 +439,9 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
   );
 
   const ImageComponent = () => (
-    <div className="bg-gray-100 rounded-xl overflow-hidden flex flex-col relative shadow-inner group h-full">
+    <div className="bg-gray-100 rounded-xl overflow-hidden flex flex-col relative shadow-inner group h-full z-10">
       <div 
-        className="relative flex-1 min-h-0 bg-slate-200 flex items-center justify-center"
+        className={`relative bg-slate-200 flex items-center justify-center ${slide.imageWidth || slide.imageHeight ? 'flex-none' : 'flex-1 min-h-0'}`}
         style={{
           width: slide.imageWidth ? `${slide.imageWidth}px` : '100%',
           height: slide.imageHeight ? `${slide.imageHeight}px` : '100%',
@@ -443,7 +456,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
           <button onClick={onRegenerateImage} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-semibold z-20"><div className="flex flex-col items-center"><svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span>Regenerate Image</span></div></button>
         )}
         {slide.imageUrl ? (<img src={slide.imageUrl} alt={slide.title} className="w-full h-full object-cover" />) : (<div className="flex flex-col items-center text-slate-400"><svg className="w-12 h-12 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Loading AI Visual...</span></div>)}
-        <ResizeHandle id="layout-image" />
+        <LayoutResizeHandle id="layout-image" />
       </div>
       <div className="bg-white border-t p-3 shrink-0"><div className="flex items-center space-x-1 mb-1"><svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Prompt</span></div><div contentEditable suppressContentEditableWarning onBlur={(e) => handleFieldChange('imagePrompt', e.currentTarget.innerText)} className="text-[11px] text-slate-500 italic focus:outline-none focus:ring-1 focus:ring-indigo-500/30 rounded p-1.5 bg-slate-50 border border-transparent hover:border-slate-200 transition-all cursor-text min-h-[3em]">{slide.imagePrompt || ''}</div></div>
     </div>
@@ -531,7 +544,7 @@ const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, onUpdate, isActive
           ) : (
             <div className="relative w-full h-full">
               <img src={el.content} alt="floating" className="w-full h-full object-contain shadow-xl rounded-lg" />
-              <ResizeHandle id={el.id} />
+              <FloatingResizeHandle id={el.id} />
             </div>
           )}
         </div>
