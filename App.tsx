@@ -556,18 +556,25 @@ const EditorView: React.FC = () => {
 
   const handleRegenerateActiveSlide = async () => {
     if (!activeSlide || !presentation) return;
+    
+    // Capture state before closing modal
+    const currentRegenPrompt = regenPrompt || 'Refine this slide with fresh content and better structure.';
+    const currentIsRefinement = isRefinement;
+    
+    // Close modal immediately
+    setShowRegenModal(false);
+    setRegenPrompt('');
+    
     setIsGenerating(true);
-    setStatusMessage(isRefinement ? 'Refining slide...' : 'Regenerating slide...');
+    setStatusMessage(currentIsRefinement ? 'Refining slide...' : 'Regenerating slide...');
     try {
       const refined = await refineSlide(
         presentation.title, 
-        regenPrompt || 'Refine this slide with fresh content and better structure.',
+        currentRegenPrompt,
         activeSlide,
-        isRefinement
+        currentIsRefinement
       );
       updateSlide({ ...activeSlide, ...refined });
-      setShowRegenModal(false);
-      setRegenPrompt('');
     } catch (e) {
       alert('Regeneration failed.');
     } finally {
@@ -817,7 +824,7 @@ const EditorView: React.FC = () => {
                </div>
                <div className="w-px h-4 bg-slate-200" />
                <button onClick={() => { setIsRefinement(false); setShowRegenModal(true); }} className="flex items-center space-x-2 text-xs font-bold text-purple-600 hover:text-purple-700 px-2 py-1 rounded-lg hover:bg-purple-50">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2}/></svg>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2}/></svg>
                   <span>Regenerate Slide</span>
                </button>
             </div>
@@ -904,13 +911,15 @@ const EditorView: React.FC = () => {
                <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">From URL</label>
                  <div className="flex space-x-2">
-                    <input type="text" value={imageInputUrl} onChange={(e) => imageInputUrl(e.target.value)} className="flex-1 border p-2 rounded-lg text-xs outline-none" placeholder="https://..." />
+                    {/* Fix: use setImageInputUrl instead of imageInputUrl as function */}
+                    <input type="text" value={imageInputUrl} onChange={(e) => setImageInputUrl(e.target.value)} className="flex-1 border p-2 rounded-lg text-xs outline-none" placeholder="https://..." />
                     <button onClick={() => handleAddImageElement('url')} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Add</button>
                  </div>
                </div>
                <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Generated</label>
-                 <textarea value={imageAIPrompt} onChange={(e) => imageAIPrompt(e.target.value)} className="w-full border p-2 rounded-lg text-xs outline-none h-20 resize-none" placeholder="Describe the image you want..." />
+                 {/* Fix: use setImageAIPrompt instead of imageAIPrompt as function */}
+                 <textarea value={imageAIPrompt} onChange={(e) => setImageAIPrompt(e.target.value)} className="w-full border p-2 rounded-lg text-xs outline-none h-20 resize-none" placeholder="Describe the image you want..." />
                  <button onClick={() => handleAddImageElement('ai')} className="w-full bg-purple-600 text-white py-2 rounded-lg text-xs font-bold">Generate & Add</button>
                </div>
                <div className="pt-4 border-t text-center">
