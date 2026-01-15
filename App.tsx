@@ -559,6 +559,23 @@ const EditorView: React.FC = () => {
     }
   };
 
+  const handleRegenerateMainImage = async () => {
+    if (!activeSlide || !presentation) return;
+    const promptToUse = activeSlide.imagePrompt || activeSlide.title.replace(/<[^>]*>/g, '');
+    setIsGenerating(true);
+    setStatusMessage('Regenerating Image...');
+    try {
+      const imageUrl = await generateImage(promptToUse);
+      updateSlide({ ...activeSlide, imageUrl, imagePrompt: promptToUse });
+    } catch (e) {
+      console.error(e);
+      alert('Image generation failed.');
+    } finally {
+      setIsGenerating(false);
+      setStatusMessage('');
+    }
+  };
+
   const handleAddImageElement = async (source: 'url' | 'ai' | 'paste') => {
     if (!activeSlide) return;
     
@@ -687,7 +704,7 @@ const EditorView: React.FC = () => {
               </div>
 
               <button onClick={openPresenterMode} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center space-x-2 ml-1">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeWidth={2}/></svg>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeWidth={2}/></svg>
                 <span>Present</span>
               </button>
             </>
@@ -783,7 +800,14 @@ const EditorView: React.FC = () => {
 
           {presentation && activeSlide ? (
             <div className="w-full max-w-5xl">
-              <SlideRenderer slide={activeSlide} onUpdate={updateSlide} isActive={true} isEditMode={isEditMode} />
+              <SlideRenderer 
+                slide={activeSlide} 
+                onUpdate={updateSlide} 
+                isActive={true} 
+                isEditMode={isEditMode} 
+                onRegenerateImage={handleRegenerateMainImage}
+                isImageLoading={isGenerating && statusMessage === 'Regenerating Image...'}
+              />
               <div className="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Speaker Notes</div>
                 <textarea 

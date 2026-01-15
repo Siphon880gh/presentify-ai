@@ -15,7 +15,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization.
+- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization. Now includes a wired-up `handleRegenerateMainImage` for on-canvas visual refinement.
 - `EditorView`: Manages presentation state, slide navigation, library management, and **Advanced Edit Mode** toggling. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
 - `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Now includes an **Auto-Play** mode that uses TTS to read notes and advance slides.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images) and **Image Resizing**.
@@ -30,6 +30,7 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Slide Reordering:** When in Edit Mode, the slide outline in the `Aside` becomes draggable (HTML5 Drag and Drop API), allowing users to re-sequence slides instantly. A **blue horizontal insert indicator** appears during drag-over to show exactly where the slide will land.
 - **Layout Switching:** A "Layout" dropdown in the Edit Mode toolbar allows users to instantly swap the layout of the active slide (e.g., TITLE to IMAGE_LEFT). The content is preserved and re-adapted to the new structural skeleton.
 - **Single Slide Regeneration:** A floating toolbar in the editor allows users to regenerate the active slide with a custom AI prompt, leveraging the `refineSlide` service for targeted updates.
+- **Main Image Regeneration:** In Edit Mode, hovering over the main slide image reveals a "Regenerate Image" overlay. Clicking this triggers `handleRegenerateMainImage` in `App.tsx`, which uses the image prompt (or slide title) to fetch a new visual from Gemini 2.5 Flash Image.
 - **Floating Elements:** Users can add independent text and image elements to any slide. 
   - **Text:** Uses the `RichTextEditor` for consistent styling.
   - **Images:** Can be added via direct URL or generated on-the-fly via AI prompts.
