@@ -36,6 +36,7 @@ export interface Slide {
   transitionType?: SlideTransition;
   notes?: string;
   floatingElements?: FloatingElement[];
+  voiceName?: string;
 }
 
 export interface Presentation {
@@ -43,4 +44,5 @@ export interface Presentation {
   title: string;
   slides: Slide[];
   transitionType?: SlideTransition;
+  defaultVoiceName?: string;
 }

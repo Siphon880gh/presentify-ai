@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Presentation, Slide, SlideLayout, SlideTransition, FloatingElement } from './types';
@@ -76,6 +75,8 @@ const qualitativeOptions = [
   { label: 'Many', count: 15 },
   { label: 'Numerous', count: 20 },
 ];
+
+const AVAILABLE_VOICES = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'];
 
 const stripImagesFromPresentation = (pres: Presentation): { presentation: Presentation; images: Record<string, string> } => {
   const images: Record<string, string> = {};
@@ -162,6 +163,7 @@ const EditorView: React.FC = () => {
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showOpenModal, setShowOpenModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [savedLibrary, setSavedLibrary] = useState<SavedPresentationMeta[]>([]);
   const [isFullscreenPresenting, setIsFullscreenPresenting] = useState(false);
@@ -689,7 +691,7 @@ const EditorView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-end space-x-1 w-[380px] shrink-0">
+        <div className="flex items-center justify-end space-x-1 w-[420px] shrink-0">
 
           <TooltipButton
             onClick={handleLoadDemo}
@@ -706,6 +708,15 @@ const EditorView: React.FC = () => {
           >
              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
           </TooltipButton>
+
+          {presentation && (
+            <TooltipButton 
+              onClick={() => setShowVoiceModal(true)} 
+              title="Voice Narration"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" strokeWidth={2}/></svg>
+            </TooltipButton>
+          )}
 
           <TooltipButton 
             onClick={() => { setSavedLibrary(getLibrary()); setShowOpenModal(true); }} 
@@ -911,14 +922,12 @@ const EditorView: React.FC = () => {
                <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">From URL</label>
                  <div className="flex space-x-2">
-                    {/* Fix: use setImageInputUrl instead of imageInputUrl as function */}
                     <input type="text" value={imageInputUrl} onChange={(e) => setImageInputUrl(e.target.value)} className="flex-1 border p-2 rounded-lg text-xs outline-none" placeholder="https://..." />
                     <button onClick={() => handleAddImageElement('url')} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Add</button>
                  </div>
                </div>
                <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Generated</label>
-                 {/* Fix: use setImageAIPrompt instead of imageAIPrompt as function */}
                  <textarea value={imageAIPrompt} onChange={(e) => setImageAIPrompt(e.target.value)} className="w-full border p-2 rounded-lg text-xs outline-none h-20 resize-none" placeholder="Describe the image you want..." />
                  <button onClick={() => handleAddImageElement('ai')} className="w-full bg-purple-600 text-white py-2 rounded-lg text-xs font-bold">Generate & Add</button>
                </div>
@@ -927,6 +936,57 @@ const EditorView: React.FC = () => {
                </div>
             </div>
             <button onClick={() => setShowImageAddModal(false)} className="mt-6 w-full py-2 text-slate-400 text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {showVoiceModal && presentation && (
+        <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl">
+            <h3 className="text-xl font-bold mb-6">Voice Narration Settings</h3>
+            
+            <div className="space-y-8">
+               <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Default Presentation Voice</label>
+                  <div className="flex flex-wrap gap-2">
+                    {AVAILABLE_VOICES.map(voice => (
+                      <button 
+                        key={voice}
+                        onClick={() => setPresentation({...presentation, defaultVoiceName: voice})}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${presentation.defaultVoiceName === voice || (!presentation.defaultVoiceName && voice === 'Zephyr') ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                      >
+                        {voice}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400">This voice will be used for all slides unless overridden.</p>
+               </div>
+
+               <div className="pt-6 border-t space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Override voice for current slide</label>
+                    {activeSlide?.voiceName && (
+                      <button onClick={() => updateSlide({...activeSlide!, voiceName: undefined})} className="text-[10px] font-bold text-red-500 hover:underline">Clear Override</button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {AVAILABLE_VOICES.map(voice => (
+                      <button 
+                        key={voice}
+                        onClick={() => updateSlide({...activeSlide!, voiceName: voice})}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${activeSlide?.voiceName === voice ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                      >
+                        {voice}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400">Override the global presentation voice for this specific slide.</p>
+               </div>
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <button onClick={() => setShowVoiceModal(false)} className="bg-indigo-600 text-white px-8 py-2 rounded-xl font-bold shadow-lg shadow-indigo-100">Done</button>
+            </div>
           </div>
         </div>
       )}
@@ -1141,7 +1201,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                 >
                   <button onClick={() => removeTopic(t.id)} className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400">×</button>
                   <div className="flex items-center space-x-4">
-                    <span className="text-[10px] font-black text-indigo-400 bg-white w-6 h-6 flex items-center justify-center rounded-full shadow-sm shrink-0">{index + 1}</span>
+                    <span className="text-[10px] font-black text-indigo-400 bg-white_w-6 h-6 flex items-center justify-center rounded-full shadow-sm shrink-0">{index + 1}</span>
                     <div className="flex-1 space-y-1">
                       <input type="text" value={t.title} onChange={(e) => updateTopic(t.id, 'title', e.target.value)} placeholder="Title Focus" className="w-full bg-transparent border-none text-sm font-bold p-0 outline-none" />
                       <input type="text" value={t.detail} onChange={(e) => updateTopic(t.id, 'detail', e.target.value)} placeholder="Add details or context for this slide..." className="w-full bg-transparent border-none text-xs p-0 outline-none text-slate-500" />
@@ -1165,6 +1225,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
 
 interface AudioCacheEntry {
   notes: string;
+  voiceName: string;
   buffer: AudioBuffer;
 }
 
@@ -1221,20 +1282,21 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
     const notes = slide.notes?.trim();
     if (!notes) return null;
 
+    const voiceName = slide.voiceName || presentation.defaultVoiceName || 'Zephyr';
     const cached = audioCacheRef.current.get(slide.id);
-    if (cached && cached.notes === notes) return cached.buffer;
+    if (cached && cached.notes === notes && cached.voiceName === voiceName) return cached.buffer;
 
     try {
-      const base64 = await speakText(notes);
+      const base64 = await speakText(notes, voiceName);
       const ctx = getAudioContext();
       const buffer = await decodeAudioData(decode(base64), ctx, 24000, 1);
-      audioCacheRef.current.set(slide.id, { notes, buffer });
+      audioCacheRef.current.set(slide.id, { notes, voiceName, buffer });
       return buffer;
     } catch (e) {
       console.error(`Audio fetch failed for slide ${slide.id}`, e);
       return null;
     }
-  }, [getAudioContext]);
+  }, [getAudioContext, presentation.defaultVoiceName]);
 
   const prefetchNext = useCallback(async (currentIndex: number) => {
     const nextIdx = currentIndex + 1;

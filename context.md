@@ -15,42 +15,32 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
-- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization. Now includes **Global Refinement Mode** to iterate on existing slideshows.
+- `App.tsx`: The main orchestrator. Includes `HashRouter` and primary views (`EditorView`, `PresenterView`). Features an auto-expanding multiline prompt field in the header, the **Prompt Wizard** with source grounding, and **Edit Mode** for canvas-style customization. Now includes **Voice Narration Settings** for global and slide-specific voices.
 - `EditorView`: Manages presentation state, slide navigation, library management, and **Advanced Edit Mode** toggling. Features a **dynamically expanding prompt field** and a **Prompt Wizard** for complex structure and source-based generation.
-- `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Now includes an **Auto-Play** mode that uses TTS to read notes and advance slides.
-- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images) and **Image Resizing**. Includes optimized bullet point alignment for high-quality PDF exports via adjusted Tailwind spacing.
-- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement via `refineSlide`. Updated `generatePresentation` to support iterative **Global Refinement Mode**.
-- `types.ts`: Schema definitions, now including `FloatingElement` and updated `Slide` schema with dimension support.
-- `demo/index.ts`: Sample presentation data, now enhanced with **Speaker Notes** to demonstrate Auto-Play/TTS capabilities.
+- `PresenterView`: A specialized view for presenters with slide previews and speaker notes. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides, now with support for per-slide voice overrides.
+- `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** (draggable text and images) and **Image Resizing**.
+- `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText` (supporting multiple voices), and slide refinement via `refineSlide`.
+- `types.ts`: Schema definitions, now including `FloatingElement` and updated `Slide` and `Presentation` schemas with `voiceName` support.
+- `demo/index.ts`: Sample presentation data enhanced with **Speaker Notes**.
 - `vite-env.d.ts`: Shorthand module declarations for asset resolution.
 
 ## 3. Architecture & Code Flow
 
 ### UI/UX: Generation & Refinement
-- **Global Refinement Mode:** Users can refine an entire presentation instead of starting over. 
-  - **Header Dropdown:** A "Refine Slideshow" button appears under the "Create" split button if a deck is already open.
-  - **Prompt Wizard Integration:** A "Refine Existing Deck" toggle in the structure section of the wizard allows grounding refinement with new source documents or structural changes.
-  - **AI Logic:** The current deck's high-level structure (titles and bullet summaries) is passed back to Gemini as context, allowing it to modify, reorder, or add slides while maintaining continuity.
+- **Global Refinement Mode:** Users can refine an entire presentation instead of starting over.
 - **Toggle Mechanism:** An "Edit Mode" button in the header activates specialized editing tools.
-- **Clean View Implementation:** `SlideRenderer` strictly respects the `isEditMode` prop. When `false` (default for Presenter mode and PDF export), editor-only UI elements are hidden.
-- **Slide Reordering:** When in Edit Mode, the slide outline in the `Aside` becomes draggable (HTML5 Drag and Drop API), allowing users to re-sequence slides instantly.
-- **Single Slide Regeneration:** A floating toolbar in the editor allows users to regenerate or refine a single slide. 
-  - **Refinement Mode:** A specialized checkbox allows building on existing slide content instead of replacing it entirely.
-- **Main Image Regeneration:** In Edit Mode, hovering over the main slide image reveals a "Regenerate Image" overlay. 
-- **Floating Elements:** Users can add independent text and image elements with responsive percentage positioning and snap-to-center alignment guides.
-- **Image Resizing:** All images feature a bottom-right resize handle in Edit Mode. 
-
-### UI/UX: Prompt Field & Wizard
-- **Layout Stability:** The header uses fixed-width side containers to prevent the center prompt from shifting horizontally.
-- **Prompt Field:** Monitors `prompt.length` and focus state to dynamically expand. Height is constrained between **34px and 60px** for layout stability.
-- **Split Button:** The "Create" button features a split dropdown for the Prompt Wizard and Refinement options.
-- **Prompt Wizard:** A comprehensive modal for source grounding, exact slide counts, and custom slide structures.
+- **Voice Editing Modal:** A dedicated modal allows users to manage narration voices.
+  - **Global Voice:** Apply a single voice to the entire presentation.
+  - **Slide Overrides:** Assign specific voices (Puck, Charon, Kore, Fenrir, Zephyr) to individual slides.
+  - **Cache Invalidation:** Changing a voice (globally or per-slide) invalidates the `audioCacheRef` in `PresenterView`, forcing a fresh TTS generation during playback.
+- **Slide Reordering:** HTML5 Drag and Drop support in the slide outline.
+- **Floating Elements:** Independent text and image elements with percentage positioning.
 
 ### Presenter Mode & Auto-Play (High Performance)
 - **Mechanism:** Uses the browser's Fullscreen API.
-- **Auto-Play Logic:** An automated narration sequence using Gemini TTS.
-  - **Audio Caching & Prefetching:** Implements slide-id-based caching and pre-fetches the next slide's audio for zero-latency transitions.
-  - **Notes Sync:** Auto-scrolls speaker notes in sync with audio playback percentage.
+- **Auto-Play Logic:** Narration using Gemini TTS.
+  - **Audio Caching & Prefetching:** Implements slide-id based caching that respects both `notes` and `voiceName`.
+  - **Notes Sync:** Auto-scrolls speaker notes in sync with audio playback.
 - **Audio Processing:** Implements a raw PCM decoder for Gemini TTS output.
 
 ### Grounded Content Generation

@@ -223,7 +223,7 @@ export const regenerateSlide = async (topic: string, slideContext: string): Prom
   };
 };
 
-export const speakText = async (text: string): Promise<string> => {
+export const speakText = async (text: string, voiceName: string = 'Zephyr'): Promise<string> => {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text: `Say clearly: ${text}` }] }],
@@ -231,7 +231,7 @@ export const speakText = async (text: string): Promise<string> => {
       responseModalities: [Modality.AUDIO],
       speechConfig: {
         voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: 'Zephyr' },
+          prebuiltVoiceConfig: { voiceName },
         },
       },
     },
