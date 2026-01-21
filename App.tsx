@@ -190,6 +190,7 @@ const EditorView: React.FC = () => {
   // Voice Preview State
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const previewCacheRef = useRef<Record<string, string>>({});
+  const [autoplayDelay, setAutoplayDelay] = useState(1000);
 
   // Drag handles for outline
   const slideDragItem = useRef<number | null>(null);
@@ -732,7 +733,7 @@ const EditorView: React.FC = () => {
   };
 
   if (isFullscreenPresenting && presentation) {
-    return <PresenterView presentation={presentation} initialIndex={currentSlideIndex} onExit={() => setIsFullscreenPresenting(false)} />;
+    return <PresenterView presentation={presentation} initialIndex={currentSlideIndex} onExit={() => setIsFullscreenPresenting(false)} autoplayDelay={autoplayDelay} />;
   }
 
   return (
@@ -785,7 +786,7 @@ const EditorView: React.FC = () => {
                     ? "Expert-level content with specific data, nuanced insights, and actionable takeaways" 
                     : "Standard professional slides with clean structure and clear messaging"}
                 </p>
-                <p className="text-[10px] text-slate-400 max-w-[200px] leading-relaxed">Want to upload supporting documents, add slide ideas, recommend number of slides? <button onClick={() => setShowPromptWizard(true)} className="text-indigo-600 hover:text-indigo-800 font-medium underline">Open Prompt Wizard</button></p>
+                <p className="mt-2 text-[10px] text-slate-400 max-w-[200px] leading-relaxed">Want to upload supporting documents, add slide ideas, recommend number of slides? <button onClick={() => setShowPromptWizard(true)} className="text-indigo-600 hover:text-indigo-800 font-medium underline">Open Prompt Wizard</button></p>
               </div>
             )}
             <div className="absolute right-1 flex items-center wizard-dropdown-container"
@@ -861,7 +862,7 @@ const EditorView: React.FC = () => {
               
               <div className="relative export-menu-container flex items-center">
                 <TooltipButton onClick={() => setShowExportMenu(!showExportMenu)} title="Export">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003 3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
                 </TooltipButton>
                 {showExportMenu && (
                   <div className="absolute top-full right-0 mt-2 w-48 bg-white border rounded-xl shadow-2xl z-[100] p-1.5">
@@ -1123,13 +1124,41 @@ const EditorView: React.FC = () => {
                           {previewingVoice === voiceName ? (
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                           ) : (
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 100-16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
                           )}
                         </button>
                       </div>
                     ))}
                   </div>
                   <p className="text-[10px] text-slate-400">Override the global presentation voice for this specific slide.</p>
+               </div>
+
+               <div className="pt-6 border-t space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Autoplay Delay</label>
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max="5000"
+                      step="250"
+                      value={autoplayDelay}
+                      onChange={(e) => setAutoplayDelay(parseInt(e.target.value))}
+                      className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                    <div className="flex items-center space-x-1 bg-slate-50 rounded-lg px-3 py-1.5 border">
+                      <input
+                        type="number"
+                        min="0"
+                        max="10000"
+                        step="250"
+                        value={autoplayDelay}
+                        onChange={(e) => setAutoplayDelay(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-14 bg-transparent text-xs font-mono outline-none text-center text-slate-800"
+                      />
+                      <span className="text-[10px] text-slate-400">ms</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Delay before advancing to the next slide after narration ends.</p>
                </div>
             </div>
 
@@ -1404,12 +1433,11 @@ interface AudioCacheEntry {
   buffer: AudioBuffer;
 }
 
-const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number, onExit: () => void }> = ({ presentation, initialIndex, onExit }) => {
+const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number, onExit: () => void, autoplayDelay: number }> = ({ presentation, initialIndex, onExit, autoplayDelay }) => {
   const [index, setIndex] = useState(initialIndex);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
-  const [autoplayDelay, setAutoplayDelay] = useState(1000); // Delay in ms before advancing after narration ends
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -1614,19 +1642,6 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
               {errorToast}
             </div>
           )}
-          <div className="flex items-center space-x-2 bg-slate-800 rounded-full px-3 py-1">
-            <label className="text-[10px] text-slate-500 font-bold uppercase">Delay</label>
-            <input
-              type="number"
-              min="0"
-              max="10000"
-              step="500"
-              value={autoplayDelay}
-              onChange={(e) => setAutoplayDelay(Math.max(0, parseInt(e.target.value) || 0))}
-              className="w-16 bg-slate-700 text-white text-xs font-mono px-2 py-1 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500 text-center"
-            />
-            <span className="text-[10px] text-slate-500">ms</span>
-          </div>
           <button 
             onClick={() => setIsAutoPlaying(!isAutoPlaying)} 
             className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
