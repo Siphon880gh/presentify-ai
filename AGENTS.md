@@ -24,7 +24,9 @@ The app includes a dedicated **Test Harness** (`TestHarness.tsx`) for validating
 ### Diagnostic Capabilities
 - **Auth Lifecycle**: Validates signup, login, and logout state transitions.
 - **Data Isolation**: Verifies that IndexedDB presentations and session data are correctly scoped to the `userId` of the currently authenticated session.
-- **System Health**: Provides "Soft Reset" and "Nuke Storage" utilities to clean diagnostic environments.
+- **Settings Persistence**: Validates that `UserSettings` are persisted per-user in local storage.
+- **Security Validation**: Ensures that cross-user data access (deletions/reads) is restricted at the service layer.
+- **System Health**: Provides "Factory Reset" to purge all local storage and IndexedDB instances.
 
 ## Multi-User Authentication System
 
@@ -85,6 +87,4 @@ interface UserSettings {
   defaultAdvancedMode: boolean;
   autoplayDelay: number;
 }
-
-// ... other UI-related documentation follows ...
 ```
