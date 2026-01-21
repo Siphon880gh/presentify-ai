@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Presentation, Slide, SlideLayout, SlideTransition, FloatingElement } from './types';
@@ -7,6 +8,20 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import pptxgen from 'pptxgenjs';
 import { DEMO_PRESENTATION } from './demo';
+import {
+  initializeStorage,
+  getSettings,
+  updateSettings,
+  listPresentations,
+  getPresentation,
+  savePresentation,
+  deletePresentation,
+  saveCurrentSession,
+  loadCurrentSession,
+  saveSlideImage,
+  generateId,
+  PresentationMeta,
+} from './services/storageService';
 
 // Audio Helpers
 function decode(base64: string) {
@@ -39,12 +54,6 @@ const getPdfLib = async () => {
 };
 const getMammoth = () => import('mammoth');
 
-// Storage keys
-const STORAGE_CURRENT = 'presentify_current';
-const STORAGE_LIBRARY = 'presentify_library';
-const STORAGE_PRES_PREFIX = 'presentify_pres_';
-const STORAGE_IMG_PREFIX = 'presentify_img_';
-
 // Wizard Topic Interface
 interface WizardTopic {
   id: string;
@@ -59,14 +68,6 @@ interface WizardFile {
   content: string; // text content or base64
   isImage: boolean;
   mimeType: string;
-}
-
-// Storage helpers
-interface SavedPresentationMeta {
-  id: string;
-  title: string;
-  savedAt: string;
-  slideCount: number;
 }
 
 const qualitativeOptions = [
@@ -85,52 +86,8 @@ const VOICE_METADATA: Record<string, { gender: 'M' | 'F' }> = {
   Zephyr: { gender: 'F' }
 };
 
-const stripImagesFromPresentation = (pres: Presentation): { presentation: Presentation; images: Record<string, string> } => {
-  const images: Record<string, string> = {};
-  const slides = pres.slides.map(slide => {
-    if (slide.imageUrl) {
-      images[slide.id] = slide.imageUrl;
-    }
-    return { ...slide, imageUrl: '' };
-  });
-  return { presentation: { ...pres, slides }, images };
-};
-
-const saveImagesToStorage = (presId: string, images: Record<string, string>) => {
-  Object.entries(images).forEach(([slideId, imageUrl]) => {
-    if (imageUrl) {
-      try {
-        localStorage.setItem(`${STORAGE_IMG_PREFIX}${presId}_${slideId}`, imageUrl);
-      } catch (e) {
-        console.warn(`Failed to save image for slide ${slideId}`, e);
-      }
-    }
-  });
-};
-
-const loadImagesFromStorage = (presId: string, slides: Slide[]): Slide[] => {
-  return slides.map(slide => {
-    const storedImage = localStorage.getItem(`${STORAGE_IMG_PREFIX}${presId}_${slide.id}`);
-    return storedImage ? { ...slide, imageUrl: storedImage } : slide;
-  });
-};
-
-const getLibrary = (): SavedPresentationMeta[] => {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_LIBRARY) || '[]');
-  } catch {
-    return [];
-  }
-};
-
-const saveToLibrary = (meta: SavedPresentationMeta) => {
-  const library = getLibrary().filter(p => p.id !== meta.id);
-  library.unshift(meta);
-  localStorage.setItem(STORAGE_LIBRARY, JSON.stringify(library));
-};
-
 const TooltipButton: React.FC<{
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   title: string;
   children: React.ReactNode;
   className?: string;
@@ -156,9 +113,12 @@ const TooltipButton: React.FC<{
 };
 
 const EditorView: React.FC = () => {
+  // Load persisted settings
+  const persistedSettings = getSettings();
+  
   const [prompt, setPrompt] = useState('');
   const [isPromptFocused, setIsPromptFocused] = useState(false);
-  const [isAdvancedMode, setIsAdvancedMode] = useState(true);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(persistedSettings.defaultAdvancedMode);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [presentation, setPresentation] = useState<Presentation | null>(null);
@@ -173,7 +133,7 @@ const EditorView: React.FC = () => {
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [saveName, setSaveName] = useState('');
-  const [savedLibrary, setSavedLibrary] = useState<SavedPresentationMeta[]>([]);
+  const [savedLibrary, setSavedLibrary] = useState<PresentationMeta[]>([]);
   const [isFullscreenPresenting, setIsFullscreenPresenting] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
 
@@ -190,7 +150,7 @@ const EditorView: React.FC = () => {
   // Voice Preview State
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const previewCacheRef = useRef<Record<string, string>>({});
-  const [autoplayDelay, setAutoplayDelay] = useState(1000);
+  const [autoplayDelay, setAutoplayDelay] = useState(persistedSettings.autoplayDelay);
 
   // Drag handles for outline
   const slideDragItem = useRef<number | null>(null);
@@ -284,24 +244,23 @@ const EditorView: React.FC = () => {
     }
   }, [showVoiceModal]);
 
-  // Sync session to storage
-  const syncToCurrentStorage = useCallback(() => {
+  // Persist user settings when they change
+  useEffect(() => {
+    updateSettings({
+      defaultAdvancedMode: isAdvancedMode,
+      autoplayDelay: autoplayDelay,
+    });
+  }, [isAdvancedMode, autoplayDelay]);
+
+  // Sync session to storage using new database service
+  const syncToCurrentStorage = useCallback(async () => {
     if (!presentation) return;
     try {
-      const { presentation: presWithoutImages } = stripImagesFromPresentation(presentation);
-      const savedAt = new Date().toLocaleTimeString();
-      const dataToSave = {
-        presentation: presWithoutImages,
-        index: currentSlideIndex,
-        savedAt
-      };
-      localStorage.setItem(STORAGE_CURRENT, JSON.stringify(dataToSave));
-      const images: Record<string, string> = {};
-      presentation.slides.forEach(slide => {
-        if (slide.imageUrl) images[slide.id] = slide.imageUrl;
-      });
-      saveImagesToStorage(presentation.id, images);
-      setLastSaved(savedAt);
+      const success = await saveCurrentSession(presentation, currentSlideIndex);
+      if (success) {
+        const savedAt = new Date().toLocaleTimeString();
+        setLastSaved(savedAt);
+      }
     } catch (e) {
       console.warn("Session sync failed", e);
     }
@@ -314,20 +273,18 @@ const EditorView: React.FC = () => {
     }
   }, [presentation, currentSlideIndex, syncToCurrentStorage]);
 
-  // Load from localStorage on mount
+  // Load from storage on mount
   useEffect(() => {
-    const savedData = localStorage.getItem(STORAGE_CURRENT);
-    if (savedData) {
-      try {
-        const { presentation: savedPres, index, savedAt } = JSON.parse(savedData);
-        if (savedPres && Array.isArray(savedPres.slides)) {
-          const slidesWithImages = loadImagesFromStorage(savedPres.id, savedPres.slides);
-          setPresentation({ ...savedPres, slides: slidesWithImages });
-          setCurrentSlideIndex(Math.min(index || 0, savedPres.slides.length - 1));
-          setLastSaved(savedAt);
-        }
-      } catch (e) {}
-    }
+    const init = async () => {
+      await initializeStorage();
+      const { presentation: savedPres, slideIndex } = await loadCurrentSession();
+      if (savedPres) {
+        setPresentation(savedPres);
+        setCurrentSlideIndex(slideIndex);
+        setLastSaved(new Date().toLocaleTimeString());
+      }
+    };
+    init();
   }, []);
 
   // Listen for fullscreen exits
@@ -352,7 +309,7 @@ const EditorView: React.FC = () => {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const id = Math.random().toString(36).substr(2, 9);
+      const id = generateId();
       const fileNameLower = file.name.toLowerCase();
       const hasValidExt = allowedExtensions.some(ext => fileNameLower.endsWith(ext));
       const isImg = file.type.startsWith('image/');
@@ -421,12 +378,12 @@ const EditorView: React.FC = () => {
       );
       const slidesWithIds = data.slides.map((s: any) => ({
         ...s,
-        id: Math.random().toString(36).substr(2, 9),
+        id: generateId(),
         imageUrl: '',
       }));
       
       const newPresentation: Presentation = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: generateId(),
         title: data.title,
         slides: slidesWithIds
       };
@@ -547,14 +504,11 @@ const EditorView: React.FC = () => {
     pptx.writeFile({ fileName: `${presentation.title.substring(0, 30)}.pptx` });
   };
 
-  const handleSaveToLibrary = () => {
+  const handleSaveToLibrary = async () => {
     if (!presentation || !saveName.trim()) return;
-    const { presentation: presWithoutImages, images } = stripImagesFromPresentation(presentation);
-    const presWithTitle = { ...presWithoutImages, title: saveName.trim() };
-    localStorage.setItem(`${STORAGE_PRES_PREFIX}${presentation.id}`, JSON.stringify(presWithTitle));
-    saveImagesToStorage(presentation.id, images);
-    saveToLibrary({ id: presentation.id, title: saveName.trim(), savedAt: new Date().toISOString(), slideCount: presentation.slides.length });
-    setPresentation({ ...presentation, title: saveName.trim() });
+    const updatedPresentation = { ...presentation, title: saveName.trim() };
+    await savePresentation(updatedPresentation);
+    setPresentation(updatedPresentation);
     setShowSaveModal(false);
   };
 
@@ -594,7 +548,7 @@ const EditorView: React.FC = () => {
   };
 
   const openPresenterMode = async () => {
-    syncToCurrentStorage();
+    await syncToCurrentStorage();
     try {
       await document.documentElement.requestFullscreen();
       setIsFullscreenPresenting(true);
@@ -639,7 +593,7 @@ const EditorView: React.FC = () => {
   const addFloatingElement = (type: 'text' | 'image', content: string = 'New text element') => {
     if (!activeSlide) return;
     const newEl: FloatingElement = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateId(),
       type,
       content,
       x: 50,
@@ -845,7 +799,7 @@ const EditorView: React.FC = () => {
           )}
 
           <TooltipButton 
-            onClick={() => { setSavedLibrary(getLibrary()); setShowOpenModal(true); }} 
+            onClick={async () => { setSavedLibrary(await listPresentations()); setShowOpenModal(true); }} 
             title="Open"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" strokeWidth={2}/></svg>
@@ -862,7 +816,7 @@ const EditorView: React.FC = () => {
               
               <div className="relative export-menu-container flex items-center">
                 <TooltipButton onClick={() => setShowExportMenu(!showExportMenu)} title="Export">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 03-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2}/></svg>
                 </TooltipButton>
                 {showExportMenu && (
                   <div className="absolute top-full right-0 mt-2 w-48 bg-white border rounded-xl shadow-2xl z-[100] p-1.5">
@@ -1178,14 +1132,14 @@ const EditorView: React.FC = () => {
                 <div key={meta.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-indigo-50 transition-colors group">
                   <div>
                     <div className="font-bold text-slate-800">{meta.title}</div>
-                    <div className="text-[10px] text-slate-400 uppercase font-black">{meta.slideCount} Slides • Saved {new Date(meta.savedAt).toLocaleDateString()}</div>
+                    <div className="text-[10px] text-slate-400 uppercase font-black">{meta.slideCount} Slides • Updated {new Date(meta.updatedAt).toLocaleDateString()}</div>
                   </div>
                   <div className="flex space-x-2">
-                    <button onClick={() => {
-                      const data = localStorage.getItem(`${STORAGE_PRES_PREFIX}${meta.id}`);
-                      if (data) {
-                        const pres = JSON.parse(data);
-                        setPresentation({ ...pres, slides: loadImagesFromStorage(meta.id, pres.slides) });
+                    <button onClick={async () => {
+                      const pres = await getPresentation(meta.id);
+                      if (pres) {
+                        setPresentation(pres);
+                        setCurrentSlideIndex(0);
                         setShowOpenModal(false);
                       }
                     }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Open</button>
@@ -1258,7 +1212,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
     }
   };
 
-  const addTopic = () => setTopics([...topics, { id: Math.random().toString(36).substr(2, 9), title: '', detail: '' }]);
+  const addTopic = () => setTopics([...topics, { id: generateId(), title: '', detail: '' }]);
   const updateTopic = (id: string, field: string, val: string) => setTopics(topics.map((t: any) => t.id === id ? { ...t, [field]: val } : t));
   const removeTopic = (id: string) => setTopics(topics.filter((t: any) => t.id !== id));
 
