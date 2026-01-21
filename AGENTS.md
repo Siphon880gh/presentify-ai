@@ -1,4 +1,3 @@
-
 # Presentify AI App - Agent Documentation
 
 ## Overview
@@ -88,3 +87,11 @@ interface UserSettings {
   autoplayDelay: number;
 }
 ```
+
+## Specification Documents
+
+| Document | Description |
+|----------|-------------|
+| `specs-user-flows.md` | User journey maps, feature matrix, UI state transitions |
+| `specs-data-persistence.md` | Current client-side storage schema and API |
+| `specs-api-migration.md` | Migration plan for MongoDB + PHP RESTful API backend |
