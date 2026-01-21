@@ -1307,6 +1307,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                      </button>
                    </div>
                    <p className="text-[10px] text-slate-400">{wizardAdvancedMode ? 'Expert-level content with data points, specific examples, and nuanced insights.' : 'Standard professional presentation with clear structure.'}</p>
+                   <p className="text-[10px] text-slate-400">Want to upload supporting documents, add slide ideas, recommend number of slides? <button onClick={() => setShowPromptWizard(true)} className="text-indigo-600 hover:text-indigo-800 font-medium underline">Open Prompt Wizard</button></p>
                  </div>
 
                  <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -1408,6 +1409,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [autoplayDelay, setAutoplayDelay] = useState(1000); // Delay in ms before advancing after narration ends
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -1544,7 +1546,10 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
         };
         
         source.onended = () => {
-          if (currentSourceRef.current === source && isAutoPlaying) advance();
+          if (currentSourceRef.current === source && isAutoPlaying) {
+            // Wait for configured delay before advancing to next slide
+            autoPlayTimerRef.current = window.setTimeout(advance, autoplayDelay);
+          }
         };
 
         currentSourceRef.current = source;
@@ -1563,7 +1568,7 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
 
     runPlayback();
     return () => stopAutoPlaySession();
-  }, [index, isAutoPlaying, presentation, stopAutoPlaySession, fetchAudioBuffer, getAudioContext, prefetchNext]);
+  }, [index, isAutoPlaying, presentation, stopAutoPlaySession, fetchAudioBuffer, getAudioContext, prefetchNext, autoplayDelay]);
 
   const currentSlide = presentation.slides[index];
 
@@ -1609,6 +1614,19 @@ const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number
               {errorToast}
             </div>
           )}
+          <div className="flex items-center space-x-2 bg-slate-800 rounded-full px-3 py-1">
+            <label className="text-[10px] text-slate-500 font-bold uppercase">Delay</label>
+            <input
+              type="number"
+              min="0"
+              max="10000"
+              step="500"
+              value={autoplayDelay}
+              onChange={(e) => setAutoplayDelay(Math.max(0, parseInt(e.target.value) || 0))}
+              className="w-16 bg-slate-700 text-white text-xs font-mono px-2 py-1 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500 text-center"
+            />
+            <span className="text-[10px] text-slate-500">ms</span>
+          </div>
           <button 
             onClick={() => setIsAutoPlaying(!isAutoPlaying)} 
             className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
