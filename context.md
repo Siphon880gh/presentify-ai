@@ -12,23 +12,30 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Routing:** HashRouter (via `react-router-dom`)
 - **Styling:** Tailwind CSS (via CDN in `index.html`)
 - **AI Integration:** `@google/genai` (Gemini 3 Flash for text, Gemini 2.5 Flash for images, Gemini 2.5 Flash TTS for narration)
+- **Persistence:** Remote RESTful API (Plain PHP + MongoDB) via `services/storageService.ts` Repository pattern.
 - **Exporting Libraries:** `jspdf` (PDF generation), `html2canvas` (DOM capturing), `pptxgenjs` (PowerPoint generation)
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
 - `config.ts`: Centralized application configuration. Contains `testMode` flag to switch between standard and diagnostic environments.
-- `TestHarness.tsx`: A diagnostic UI that loads when `testMode` is active. Provides environment health checks and quick test triggers.
+- `TestHarness.tsx`: A diagnostic UI that loads when `testMode` is active. Provides environment health checks and quick test triggers for the unified storage layer.
 - `index.tsx`: Main entry point. Implements conditional rendering to bootstrap either the `App` or `TestHarness` based on `config.ts`.
 - `App.tsx`: The main orchestrator. Includes logic for **Instant Voice Previews**, gender indicators (M/F), and a fixed dependency tracking system in `PresenterView` to ensure slide-level voice overrides are respected. Implements **Global Keyboard Navigation** in `EditorView`.
 - `EditorView`: Manages presentation state and editing. Implements a `previewCacheRef` and background pre-fetching logic. Now features arrow key navigation to switch slides when not focused on an input.
 - `PresenterView`: A specialized view for presenters. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides. Features improved dependency tracking for the entire `presentation` object to ensure voice overrides are always up-to-date.
 - `components/SlideRenderer.tsx`: Contains the `SlideRenderer` for visual output, the `RichTextEditor`, and logic for handling **Floating Elements** and **Image Resizing**.
+- `services/storageService.ts`: **Repository Layer**. Abstracts data persistence via a REST API. Maintains local caching for authentication tokens and user settings to ensure smooth UI performance.
 - `services/geminiService.ts`: Abstraction layer for Gemini API. Handles structured JSON generation, TTS audio generation via `speakText`, and slide refinement.
 - `types.ts`: Schema definitions for `FloatingElement`, `Slide`, and `Presentation`.
 - `demo/index.ts`: Sample presentation data enhanced with **Speaker Notes**.
 - `vite-env.d.ts`: Shorthand module declarations for asset resolution.
 
 ## 3. Architecture & Code Flow
+
+### Data Persistence (Remote Migration)
+- **Stateless Auth:** Uses JWT tokens stored in `localStorage`.
+- **Repository Pattern:** The UI never calls the API directly. It interacts with `storageService.ts`, which handles network requests, error handling, and ObjectId mapping.
+- **Settings Sync:** User preferences are cached locally for synchronous access but synchronized with the backend on every change.
 
 ### UI/UX: Generation & Refinement
 - **Global Refinement Mode:** Users can refine an entire presentation instead of starting over.
@@ -45,10 +52,6 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Auto-Play Logic:** Narration using Gemini TTS.
   - **Audio Caching & Prefetching:** Implements slide-id based caching that respects both `notes` and `voiceName`.
 - **Audio Processing:** Implements a raw PCM decoder for Gemini TTS output.
-
-### Grounded Content Generation
-- Files are parsed on the client (PDF, DOCX, CSV, TXT, MD).
-- Images are converted to base64 and sent as multi-modal parts to Gemini 3 Flash.
 
 ---
 
