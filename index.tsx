@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import TestHarness from './TestHarness';
+import TestHarness from './TestHarnessOnline';
 import { config } from './config';
 
 const rootElement = document.getElementById('root');

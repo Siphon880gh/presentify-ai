@@ -23,7 +23,7 @@ if (file_exists($envFile)) {
 }
 
 
-$mongoUri = getenv('MONGODB_URI') ?: "mongodb://127.0.0.1:27017/aiorchestrate";
+$mongoUri = getenv('MONGODB_URI') ?: "mongodb://127.0.0.1:27017/presentify";
 $mongoUser = getenv('MONGODB_USERNAME') ?: "root";
 $mongoPass = getenv('MONGODB_PASSWORD') ?: "password";
 $mongoAuthSource = getenv('MONGODB_AUTH_SOURCE') ?: "admin";
@@ -39,7 +39,7 @@ try {
         'password' => $mongoPass,
         'authSource' => $mongoAuthSource,
     ]);
-    $db = $client->selectDatabase('aiorchestrate');
+    $db = $client->selectDatabase('presentify');
     
     // Clear existing data for fresh seed
     $db->users->deleteMany([]);

@@ -10,23 +10,30 @@ Presentify is a React-based presentation creation app powered by Gemini AI. User
 - **Styling**: Tailwind CSS
 - **Routing**: React Router (HashRouter)
 - **AI**: Google Gemini API (via `services/geminiService.ts`)
-- **Storage**: IndexedDB + localStorage (via Repository pattern in `services/storageService.ts`)
+- **Storage (Local)**: IndexedDB + localStorage (via Repository pattern in `services/storageService.ts`)
+- **Storage (Remote)**: REST API client (via Repository pattern in `services/onlineStorageService.ts`)
 - **Export**: jsPDF, pptxgenjs, html2canvas
 - **Backend (Migration Target)**: Plain PHP + MongoDB (implemented in `AGENTS/`)
 
 ## Testing Infrastructure
 
-The app includes a dedicated **Test Harness** (`TestHarness.tsx`) for validating core system logic without using the full production UI.
+The app includes two test harness components for validating core system logic without using the full production UI.
+
+### Test Harnesses
+- **`TestHarness.tsx`**: Local storage mode - uses IndexedDB and localStorage via `services/storageService.ts`
+- **`TestHarnessOnline.tsx`**: Remote API mode - uses the remote API via `services/onlineStorageService.ts`
 
 ### Test Mode Activation
-- Switch `testMode: true` in `config.ts` to boot into the Storage Lab.
+- Set `testMode: true` in `config.ts` to boot into the test harness.
+- Set `testModeOnline: true` (default) to use the online test harness with remote API.
+- Set `testModeOnline: false` to use the local storage test harness.
 
 ### Diagnostic Capabilities
 - **Auth Lifecycle**: Validates signup, login, and logout state transitions.
-- **Data Isolation**: Verifies that IndexedDB presentations and session data are correctly scoped to the `userId` of the currently authenticated session.
-- **Settings Persistence**: Validates that `UserSettings` are persisted per-user in local storage.
+- **Data Isolation**: Verifies that presentations and session data are correctly scoped to the `userId` of the currently authenticated session.
+- **Settings Persistence**: Validates that `UserSettings` are persisted per-user.
 - **Security Validation**: Ensures that cross-user data access (deletions/reads) is restricted at the service layer.
-- **System Health**: Provides "Factory Reset" to purge all local storage and IndexedDB instances.
+- **System Health**: Local harness provides "Factory Reset" to purge all local storage and IndexedDB instances.
 
 ## Multi-User Authentication System
 
@@ -45,7 +52,12 @@ The app supports multiple local users for in-person testing. All data is stored 
 
 ## Backend REST API (Migration Source of Truth)
 
-The server files are located in the `AGENTS/` directory and act as the specification for future frontend-to-remote-API migration.
+The server files are located in the `AGENTS/` directory and act as the specification for the frontend-to-remote-API migration.
+
+### Remote API Connection
+- **Base URL**: `https://wengindustries.com/backend/presentify/api.php`
+- **Client**: `services/onlineStorageService.ts` implements the repository pattern wrapping all API calls
+- **Authentication**: JWT token stored in memory, passed via `Authorization: Bearer <token>` header
 
 ### Key Files
 - `AGENTS/api.php`: Plain PHP REST API implementing the full spec (Auth, Presentations, Sessions, Settings).

@@ -837,7 +837,7 @@ const EditorView: React.FC = () => {
               </div>
             )}
             <div className="absolute right-1 flex items-center wizard-dropdown-container"
-              style={{ "top":"50%", "transform":"translateY(-50%)"}}
+              style={{ top: '50%', transform: 'translateY(-50%)' }}
             >
               <button onClick={() => handleGenerate(true)} disabled={isGenerating} className="h-8 px-4 bg-indigo-600 text-white rounded-l-full text-xs font-bold transition-colors">
                 {isGenerating ? '...' : 'Create'}
@@ -1582,7 +1582,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                 >
                   <button onClick={() => removeTopic(t.id)} className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400">×</button>
                   <div className="flex items-center space-x-4">
-                    <span className="text-[10px] font-black text-indigo-400 bg-white_w-6 h-6 flex items-center justify-center rounded-full shadow-sm shrink-0">{index + 1}</span>
+                    <span className="text-[10px] font-black text-indigo-400 bg-white w-6 h-6 flex items-center justify-center rounded-full shadow-sm shrink-0">{index + 1}</span>
                     <div className="flex-1 space-y-1">
                       <input type="text" value={t.title} onChange={(e) => updateTopic(t.id, 'title', e.target.value)} placeholder="Title Focus" className="w-full bg-transparent border-none text-sm font-bold p-0 outline-none text-slate-800" />
                       <input type="text" value={t.detail} onChange={(e) => updateTopic(t.id, 'detail', e.target.value)} placeholder="Add details or context for this slide..." className="w-full bg-transparent border-none text-xs p-0 outline-none text-slate-600" />

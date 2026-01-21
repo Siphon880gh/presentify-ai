@@ -1,7 +1,7 @@
 
 export const config = {
   /**
-   * When true, the application loads the TestHarness instead of the main App.
+   * When true, the application loads the TestHarnessOnline instead of the main App.
    */
-  testMode: false,
+  testMode: true
 };

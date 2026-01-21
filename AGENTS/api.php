@@ -62,7 +62,7 @@ try {
         'password' => $mongoPass,
         'authSource' => $mongoAuthSource,
     ]);
-    $db = $client->selectDatabase('aiorchestrate');
+    $db = $client->selectDatabase('presentify');
     
     $usersCollection = $db->users;
     $presentationsCollection = $db->presentations;
