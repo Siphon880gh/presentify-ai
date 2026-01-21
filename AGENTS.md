@@ -1,3 +1,4 @@
+
 # Presentify AI App - Agent Documentation
 
 ## Overview
@@ -6,36 +7,24 @@ Presentify is a React-based presentation creation app powered by Gemini AI. User
 
 ## Tech Stack
 
-- **Frontend**: React 18 + TypeScript + Vite
+- **Frontend**: React 19 + TypeScript + Vite
 - **Styling**: Tailwind CSS
 - **Routing**: React Router (HashRouter)
 - **AI**: Google Gemini API (via `services/geminiService.ts`)
 - **Storage**: IndexedDB + localStorage (via Repository pattern in `services/storageService.ts`)
 - **Export**: jsPDF, pptxgenjs, html2canvas
 
-## Architecture
+## Testing Infrastructure
 
-### File Structure
+The app includes a dedicated **Test Harness** (`TestHarness.tsx`) for validating core system logic without using the full production UI.
 
-```
-/
-├── App.tsx              # Main app with EditorView, PromptWizard, PresenterView
-├── types.ts             # TypeScript interfaces (Presentation, Slide, User, etc.)
-├── components/
-│   └── SlideRenderer.tsx # Renders individual slides with edit capabilities
-├── services/
-│   ├── geminiService.ts  # AI generation (presentations, images, TTS)
-│   └── storageService.ts # Data persistence layer (Repository pattern)
-├── demo/
-│   └── index.ts          # Demo presentation data
-└── vite.config.ts        # Vite configuration
-```
+### Test Mode Activation
+- Switch `testMode: true` in `config.ts` to boot into the Storage Lab.
 
-### Data Flow
-
-1. UI components interact with `storageService.ts` (never directly with localStorage/IndexedDB)
-2. Storage service manages all persistence with user-scoped data
-3. AI features call `geminiService.ts` for generation
+### Diagnostic Capabilities
+- **Auth Lifecycle**: Validates signup, login, and logout state transitions.
+- **Data Isolation**: Verifies that IndexedDB presentations and session data are correctly scoped to the `userId` of the currently authenticated session.
+- **System Health**: Provides "Soft Reset" and "Nuke Storage" utilities to clean diagnostic environments.
 
 ## Multi-User Authentication System
 
@@ -96,37 +85,6 @@ interface UserSettings {
   defaultAdvancedMode: boolean;
   autoplayDelay: number;
 }
+
+// ... other UI-related documentation follows ...
 ```
-
-## UI Components
-
-### EditorView (main workspace)
-- Header with auth controls (Login/Signup/Logout in top-right)
-- Topic input with mode selector (Simple/Advanced)
-- Slide outline sidebar (draggable in edit mode)
-- Slide canvas with SlideRenderer
-- Edit mode toolbar (add text/image, change layout, regenerate)
-
-### Auth Flow
-1. Users see Login/Signup buttons in header when not authenticated
-2. Empty state shows call-to-action to sign up
-3. After login, user's presentations load from storage
-4. Logout clears current presentation and resets state
-
-### PresenterView (fullscreen presentation)
-- Slide display with navigation
-- Auto-play with voice narration
-- Speaker notes with synchronized scrolling
-
-### PromptWizard (advanced generation)
-- Document upload (.pdf, .docx, .txt, .csv, .md, images)
-- URL input for web sources
-- Slide structure/focus definition
-- Generation mode selection
-
-## Important Notes
-
-1. **Passwords are not secure** - Uses simple hash for local testing only
-2. **No backend** - All data stays in browser storage
-3. **Repository pattern** - UI should never directly access localStorage/IndexedDB
-4. **User scoping** - All data operations automatically filter by current user
