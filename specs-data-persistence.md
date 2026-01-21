@@ -1,166 +1,187 @@
-import { Presentation } from '../types';
+# Data Persistence Specification
 
-export interface PresentationMeta {
+## Multi-User Storage Architecture
+
+Presentify supports multiple local user accounts with complete data isolation. All data is stored client-side using localStorage and IndexedDB.
+
+---
+
+## Storage Schema
+
+### localStorage Tables
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `presentify_users` | `User[]` | All registered user accounts |
+| `presentify_auth` | `{ userId: string }` | Current logged-in session |
+| `presentify_settings` | `{ [userId]: UserSettings }` | Per-user preferences map |
+
+### IndexedDB Stores
+
+**Database:** `PresentifyDB` (version 2)
+
+| Store | Key | Index | Description |
+|-------|-----|-------|-------------|
+| `presentations` | `id` (keyPath) | `userId` | User presentations with ownership |
+| `session` | `user_{userId}_current` | — | Per-user working session state |
+
+---
+
+## Type Definitions
+
+```typescript
+interface User {
+  id: string;
+  email: string;
+  passwordHash: string;
+  displayName: string;
+  createdAt: string;
+}
+
+interface UserSettings {
+  defaultAdvancedMode: boolean;
+  autoplayDelay: number;
+}
+
+interface Presentation {
+  id: string;
+  title: string;
+  slides: Slide[];
+  userId?: string;        // Owner's user ID
+  updatedAt?: string;
+  transitionType?: SlideTransition;
+  defaultVoiceName?: string;
+}
+
+interface PresentationMeta {
   id: string;
   title: string;
   updatedAt: string;
   slideCount: number;
 }
+```
 
-export interface UserSettings {
-  defaultAdvancedMode: boolean;
-  autoplayDelay: number;
+---
+
+## Authentication API
+
+### `signup(email, password, displayName)`
+Creates a new user account and auto-logs them in.
+
+**Returns:** `{ success: boolean; error?: string; user?: User }`
+
+**Errors:**
+- `"Email already registered"` — duplicate email
+
+### `login(email, password)`
+Authenticates existing user and creates session.
+
+**Returns:** `{ success: boolean; error?: string; user?: User }`
+
+**Errors:**
+- `"User not found"` — email not registered
+- `"Incorrect password"` — password mismatch
+
+### `logout()`
+Clears the current auth session from localStorage.
+
+### `getCurrentUser()`
+**Returns:** `User | null` — Full user object or null if not logged in.
+
+### `getCurrentUserId()`
+**Returns:** `string | null` — User ID or null if not logged in.
+
+---
+
+## User-Scoped Data API
+
+All data functions automatically scope to the current authenticated user. Operations fail silently (return empty/null) if no user is logged in.
+
+### Settings
+
+```typescript
+getSettings(): UserSettings
+// Returns current user's settings or defaults
+
+updateSettings(settings: Partial<UserSettings>): void
+// Merges partial settings into current user's preferences
+```
+
+**Default Settings:**
+```typescript
+{
+  defaultAdvancedMode: true,
+  autoplayDelay: 2000
 }
+```
 
-const DB_NAME = 'PresentifyDB';
-const DB_VERSION = 1;
-const STORES = {
-  PRESENTATIONS: 'presentations',
-  SESSION: 'session',
-};
+### Presentations
 
-const KEYS = {
-  SETTINGS: 'presentify_settings_v1',
-};
+```typescript
+listPresentations(): Promise<PresentationMeta[]>
+// Returns metadata for all presentations owned by current user
 
-/**
- * Lightweight IndexedDB wrapper
- */
-const getDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORES.PRESENTATIONS)) {
-        db.createObjectStore(STORES.PRESENTATIONS);
-      }
-      if (!db.objectStoreNames.contains(STORES.SESSION)) {
-        db.createObjectStore(STORES.SESSION);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-};
+getPresentation(id: string): Promise<Presentation | null>
+// Returns presentation only if owned by current user
 
-const dbOp = async <T>(storeName: string, mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest): Promise<T> => {
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, mode);
-    const store = transaction.objectStore(storeName);
-    const request = operation(store);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-};
+savePresentation(presentation: Presentation): Promise<void>
+// Saves with current user's ID and updated timestamp
 
-/**
- * Generates a simple random ID for presentations and slides.
- */
-export const generateId = () => Math.random().toString(36).substring(2, 11);
+deletePresentation(id: string): Promise<void>
+// Deletes only if current user owns the presentation
+```
 
-/**
- * Initializes the storage.
- */
-export const initializeStorage = async () => {
-  // Ensure DB is created
-  await getDB();
-  
-  if (!localStorage.getItem(KEYS.SETTINGS)) {
-    localStorage.setItem(KEYS.SETTINGS, JSON.stringify({
-      defaultAdvancedMode: true,
-      autoplayDelay: 2000,
-    }));
-  }
-};
+### Session State
 
-/**
- * Retrieves user preferences (Synchronous via localStorage).
- */
-export const getSettings = (): UserSettings => {
-  const s = localStorage.getItem(KEYS.SETTINGS);
-  return s ? JSON.parse(s) : { defaultAdvancedMode: true, autoplayDelay: 2000 };
-};
+```typescript
+saveCurrentSession(presentation: Presentation, slideIndex: number): Promise<boolean>
+// Persists working state to user-specific session key
 
-/**
- * Updates user preferences in local storage.
- */
-export const updateSettings = (settings: Partial<UserSettings>) => {
-  const current = getSettings();
-  localStorage.setItem(KEYS.SETTINGS, JSON.stringify({ ...current, ...settings }));
-};
+loadCurrentSession(): Promise<{ presentation: Presentation | null; slideIndex: number }>
+// Loads user's last working state
 
-/**
- * Returns a list of presentation metadata for library views.
- */
-export const listPresentations = async (): Promise<PresentationMeta[]> => {
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORES.PRESENTATIONS, 'readonly');
-    const store = transaction.objectStore(STORES.PRESENTATIONS);
-    const request = store.getAll();
-    request.onsuccess = () => {
-      const all = request.result as Presentation[];
-      resolve(all.map(p => ({
-        id: p.id,
-        title: p.title,
-        updatedAt: (p as any).updatedAt || new Date().toISOString(),
-        slideCount: p.slides?.length || 0,
-      })));
-    };
-    request.onerror = () => reject(request.error);
-  });
-};
+clearCurrentSession(): Promise<void>
+// Removes user's session data (used on logout)
+```
 
-/**
- * Fetches a full presentation object by its ID.
- */
-export const getPresentation = async (id: string): Promise<Presentation | null> => {
-  return dbOp<Presentation | null>(STORES.PRESENTATIONS, 'readonly', (store) => store.get(id));
-};
+---
 
-/**
- * Saves or updates a presentation in the library.
- */
-export const savePresentation = async (presentation: Presentation) => {
-  const updated = {
-    ...presentation,
-    updatedAt: new Date().toISOString(),
-  };
-  await dbOp(STORES.PRESENTATIONS, 'readwrite', (store) => store.put(updated, presentation.id));
-};
+## Data Isolation Rules
 
-/**
- * Deletes a presentation from the library.
- */
-export const deletePresentation = async (id: string) => {
-  await dbOp(STORES.PRESENTATIONS, 'readwrite', (store) => store.delete(id));
-};
+1. **Presentations** are tagged with `userId` on save
+2. **Listing** filters results by current user
+3. **Fetching** returns null if user doesn't own the presentation
+4. **Deleting** verifies ownership before removal
+5. **Session keys** are namespaced: `user_{userId}_current`
+6. **Settings** are stored in a map keyed by userId
 
-/**
- * Persists the current active presentation and slide index.
- */
-export const saveCurrentSession = async (presentation: Presentation, slideIndex: number) => {
-  await dbOp(STORES.SESSION, 'readwrite', (store) => store.put({ presentation, slideIndex }, 'current'));
-  return true;
-};
+---
 
-/**
- * Loads the last active presentation and slide index.
- */
-export const loadCurrentSession = async () => {
-  const data = await dbOp<{ presentation: Presentation | null; slideIndex: number } | null>(
-    STORES.SESSION, 
-    'readonly', 
-    (store) => store.get('current')
-  );
-  return data || { presentation: null, slideIndex: 0 };
-};
+## Security Notes
 
-/**
- * Placeholder for specifically saving/caching slide images if needed separately.
- */
-export const saveSlideImage = (slideId: string, imageData: string) => {
-  // Images are stored as data URLs directly inside the presentation object.
-  return true;
-};
+- Passwords are hashed using a simple local hash (not cryptographically secure)
+- This is designed for local multi-user testing, not production security
+- All data remains client-side (no server communication)
+- Cross-user data access is prevented at the service layer
+
+---
+
+## Utility Functions
+
+```typescript
+generateId(): string
+// Returns random 9-character alphanumeric ID
+
+initializeStorage(): Promise<void>
+// Ensures IndexedDB and localStorage tables exist
+```
+
+---
+
+## Migration Notes
+
+**v1 → v2 Changes:**
+- Added `userId` index to presentations store
+- Changed session keys from `current` to `user_{userId}_current`
+- Settings changed from single object to per-user map
+- All data functions now scope to authenticated user
