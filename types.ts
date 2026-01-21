@@ -45,4 +45,13 @@ export interface Presentation {
   slides: Slide[];
   transitionType?: SlideTransition;
   defaultVoiceName?: string;
+  userId?: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  passwordHash: string;
+  displayName: string;
+  createdAt: string;
 }

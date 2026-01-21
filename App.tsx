@@ -21,7 +21,12 @@ import {
   saveSlideImage,
   generateId,
   PresentationMeta,
+  signup,
+  login,
+  logout,
+  getCurrentUser,
 } from './services/storageService';
+import { User } from './types';
 
 // Audio Helpers
 function decode(base64: string) {
@@ -113,8 +118,17 @@ const TooltipButton: React.FC<{
 };
 
 const EditorView: React.FC = () => {
-  // Load persisted settings
-  const persistedSettings = getSettings();
+  // Auth state
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authDisplayName, setAuthDisplayName] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Load persisted settings (user-aware)
+  const persistedSettings = currentUser ? getSettings() : { defaultAdvancedMode: true, autoplayDelay: 2000 };
   
   const [prompt, setPrompt] = useState('');
   const [isPromptFocused, setIsPromptFocused] = useState(false);
@@ -252,9 +266,9 @@ const EditorView: React.FC = () => {
     });
   }, [isAdvancedMode, autoplayDelay]);
 
-  // Sync session to storage using new database service
+  // Sync session to storage using new database service (only when logged in)
   const syncToCurrentStorage = useCallback(async () => {
-    if (!presentation) return;
+    if (!presentation || !currentUser) return;
     try {
       const success = await saveCurrentSession(presentation, currentSlideIndex);
       if (success) {
@@ -264,7 +278,7 @@ const EditorView: React.FC = () => {
     } catch (e) {
       console.warn("Session sync failed", e);
     }
-  }, [presentation, currentSlideIndex]);
+  }, [presentation, currentSlideIndex, currentUser]);
 
   useEffect(() => {
     if (presentation) {
@@ -273,19 +287,98 @@ const EditorView: React.FC = () => {
     }
   }, [presentation, currentSlideIndex, syncToCurrentStorage]);
 
-  // Load from storage on mount
+  // Load from storage on mount and check auth
   useEffect(() => {
     const init = async () => {
       await initializeStorage();
-      const { presentation: savedPres, slideIndex } = await loadCurrentSession();
-      if (savedPres) {
-        setPresentation(savedPres);
-        setCurrentSlideIndex(slideIndex);
-        setLastSaved(new Date().toLocaleTimeString());
+      const user = getCurrentUser();
+      setCurrentUser(user);
+      
+      if (user) {
+        const { presentation: savedPres, slideIndex } = await loadCurrentSession();
+        if (savedPres) {
+          setPresentation(savedPres);
+          setCurrentSlideIndex(slideIndex);
+          setLastSaved(new Date().toLocaleTimeString());
+        }
       }
     };
     init();
   }, []);
+
+  // Reload user data when user changes
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (currentUser) {
+        const { presentation: savedPres, slideIndex } = await loadCurrentSession();
+        if (savedPres) {
+          setPresentation(savedPres);
+          setCurrentSlideIndex(slideIndex);
+          setLastSaved(new Date().toLocaleTimeString());
+        } else {
+          setPresentation(null);
+          setCurrentSlideIndex(0);
+        }
+        // Reload settings for new user
+        const settings = getSettings();
+        setIsAdvancedMode(settings.defaultAdvancedMode);
+        setAutoplayDelay(settings.autoplayDelay);
+      } else {
+        // Clear presentation when logged out
+        setPresentation(null);
+        setCurrentSlideIndex(0);
+      }
+    };
+    loadUserData();
+  }, [currentUser?.id]);
+
+  // Auth handlers
+  const handleAuthSubmit = () => {
+    setAuthError(null);
+    if (authMode === 'signup') {
+      if (!authDisplayName.trim()) {
+        setAuthError('Display name is required');
+        return;
+      }
+      const result = signup(authEmail, authPassword, authDisplayName);
+      if (result.success && result.user) {
+        setCurrentUser(result.user);
+        setShowAuthModal(false);
+        resetAuthForm();
+      } else {
+        setAuthError(result.error || 'Signup failed');
+      }
+    } else {
+      const result = login(authEmail, authPassword);
+      if (result.success && result.user) {
+        setCurrentUser(result.user);
+        setShowAuthModal(false);
+        resetAuthForm();
+      } else {
+        setAuthError(result.error || 'Login failed');
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    setCurrentUser(null);
+    setPresentation(null);
+    setCurrentSlideIndex(0);
+  };
+
+  const resetAuthForm = () => {
+    setAuthEmail('');
+    setAuthPassword('');
+    setAuthDisplayName('');
+    setAuthError(null);
+  };
+
+  const openAuthModal = (mode: 'login' | 'signup') => {
+    setAuthMode(mode);
+    resetAuthForm();
+    setShowAuthModal(true);
+  };
 
   // Listen for fullscreen exits
   useEffect(() => {
@@ -505,8 +598,8 @@ const EditorView: React.FC = () => {
   };
 
   const handleSaveToLibrary = async () => {
-    if (!presentation || !saveName.trim()) return;
-    const updatedPresentation = { ...presentation, title: saveName.trim() };
+    if (!presentation || !saveName.trim() || !currentUser) return;
+    const updatedPresentation = { ...presentation, title: saveName.trim(), userId: currentUser.id };
     await savePresentation(updatedPresentation);
     setPresentation(updatedPresentation);
     setShowSaveModal(false);
@@ -770,7 +863,37 @@ const EditorView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-end space-x-1 w-[420px] shrink-0">
+        <div className="flex items-center justify-end space-x-1 w-[480px] shrink-0">
+          {/* Auth Section */}
+          {currentUser ? (
+            <div className="flex items-center space-x-2 mr-3 border-r pr-3 border-slate-200">
+              <div className="text-xs">
+                <span className="text-slate-400">Hi, </span>
+                <span className="font-bold text-slate-700">{currentUser.displayName}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="text-[10px] font-bold text-slate-400 hover:text-red-500 uppercase tracking-wide px-2 py-1 rounded hover:bg-red-50 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-1 mr-3 border-r pr-3 border-slate-200">
+              <button
+                onClick={() => openAuthModal('login')}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 uppercase tracking-wide px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors"
+              >
+                Login
+              </button>
+              <button
+                onClick={() => openAuthModal('signup')}
+                className="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 uppercase tracking-wide px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Sign Up
+              </button>
+            </div>
+          )}
 
           <TooltipButton
             onClick={handleLoadDemo}
@@ -945,13 +1068,116 @@ const EditorView: React.FC = () => {
             <div className="mt-20 text-center max-w-lg">
               <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6"><svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18" strokeWidth={2}/></svg></div>
               <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Create Your Masterpiece</h2>
-              <p className="text-slate-500 text-lg">Enter a topic above or use the Prompt Wizard to upload documents and build grounded slides.</p>
+              <p className="text-slate-500 text-lg">
+                {currentUser 
+                  ? 'Enter a topic above or use the Prompt Wizard to upload documents and build grounded slides.'
+                  : 'Sign up or log in to create and save presentations.'}
+              </p>
+              {!currentUser && (
+                <div className="mt-6 flex items-center justify-center space-x-3">
+                  <button
+                    onClick={() => openAuthModal('signup')}
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                  >
+                    Sign Up
+                  </button>
+                  <button
+                    onClick={() => openAuthModal('login')}
+                    className="text-indigo-600 px-6 py-2 rounded-xl font-bold hover:bg-indigo-50 transition-colors"
+                  >
+                    Log In
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </main>
 
       {/* Modals & Overlays */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-6">{authMode === 'login' ? 'Welcome Back' : 'Create Account'}</h3>
+            
+            {authError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold">
+                {authError}
+              </div>
+            )}
+            
+            <div className="space-y-4">
+              {authMode === 'signup' && (
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Display Name</label>
+                  <input
+                    type="text"
+                    value={authDisplayName}
+                    onChange={(e) => setAuthDisplayName(e.target.value)}
+                    className="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                    placeholder="Your name"
+                  />
+                </div>
+              )}
+              
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Email</label>
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                  placeholder="email@example.com"
+                />
+              </div>
+              
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Password</label>
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAuthSubmit()}
+                  className="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            
+            <div className="mt-6 flex flex-col space-y-3">
+              <button
+                onClick={handleAuthSubmit}
+                className="w-full bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+              >
+                {authMode === 'login' ? 'Log In' : 'Create Account'}
+              </button>
+              
+              <div className="text-center text-xs text-slate-400">
+                {authMode === 'login' ? (
+                  <>
+                    Don't have an account?{' '}
+                    <button onClick={() => { setAuthMode('signup'); setAuthError(null); }} className="text-indigo-600 font-bold hover:underline">
+                      Sign up
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{' '}
+                    <button onClick={() => { setAuthMode('login'); setAuthError(null); }} className="text-indigo-600 font-bold hover:underline">
+                      Log in
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            <button onClick={() => setShowAuthModal(false)} className="mt-4 w-full py-2 text-slate-400 text-sm">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {showSaveModal && (
         <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
