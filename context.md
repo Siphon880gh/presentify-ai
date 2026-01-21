@@ -1,3 +1,4 @@
+
 # Presentify AI - Project Context
 
 > [!NOTE]
@@ -15,6 +16,9 @@ Presentify AI is a professional, AI-powered presentation generation tool. It lev
 - **Parsing Libraries:** `pdfjs-dist` (PDF extraction), `mammoth` (DOCX extraction)
 
 ## 2. File Tree & Roles
+- `config.ts`: Centralized application configuration. Contains `testMode` flag to switch between standard and diagnostic environments.
+- `TestHarness.tsx`: A diagnostic UI that loads when `testMode` is active. Provides environment health checks and quick test triggers.
+- `index.tsx`: Main entry point. Implements conditional rendering to bootstrap either the `App` or `TestHarness` based on `config.ts`.
 - `App.tsx`: The main orchestrator. Includes logic for **Instant Voice Previews**, gender indicators (M/F), and a fixed dependency tracking system in `PresenterView` to ensure slide-level voice overrides are respected. Implements **Global Keyboard Navigation** in `EditorView`.
 - `EditorView`: Manages presentation state and editing. Implements a `previewCacheRef` and background pre-fetching logic. Now features arrow key navigation to switch slides when not focused on an input.
 - `PresenterView`: A specialized view for presenters. Includes an **Auto-Play** mode that uses TTS to read notes and advance slides. Features improved dependency tracking for the entire `presentation` object to ensure voice overrides are always up-to-date.
