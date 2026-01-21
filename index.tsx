@@ -1,18 +1,17 @@
+# Presentify API - Local Development Environment
+# Copy this file to .env and customize as needed
 
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import TestHarness from './TestHarness';
-import { config } from './config';
+# Server port (used for documentation; PHP typically runs via Apache/nginx)
+PORT=3007
 
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
+# MongoDB Connection
+MONGODB_URI=mongodb://127.0.0.1:27017/presentify
 
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    {config.testMode ? <TestHarness /> : <App />}
-  </React.StrictMode>
-);
+# MongoDB Credentials
+MONGODB_USERNAME=root
+MONGODB_PASSWORD=admin_hostinger_2024
+
+# Database name
+DB_NAME=presentify
+
+JWT_SECRET=your-super-secret-jwt-key-change-in-production

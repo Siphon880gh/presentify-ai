@@ -8,9 +8,25 @@ if (file_exists($autoload)) {
     require $autoload;
 }
 
-$mongoUri = getenv('MONGODB_URI') ?: "mongodb://localhost/aiorchestrate";
-$mongoUser = getenv('MONGODB_USERNAME') ?: "admin";
+// Load environment variables from .env if present
+$envFile = __DIR__ . '/.env';
+if (file_exists($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue; // Skip comments
+        if (strpos($line, '=') === false) continue;
+        list($key, $value) = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value, " \t\n\r\0\x0B\"'"); // Trim quotes too
+        putenv("$key=$value");
+    }
+}
+
+
+$mongoUri = getenv('MONGODB_URI') ?: "mongodb://127.0.0.1:27017/aiorchestrate";
+$mongoUser = getenv('MONGODB_USERNAME') ?: "root";
 $mongoPass = getenv('MONGODB_PASSWORD') ?: "password";
+$mongoAuthSource = getenv('MONGODB_AUTH_SOURCE') ?: "admin";
 
 echo "--- Seeding Presentify AI Database ---\n";
 
@@ -21,6 +37,7 @@ try {
     $client = new MongoDB\Client($mongoUri, [
         'username' => $mongoUser,
         'password' => $mongoPass,
+        'authSource' => $mongoAuthSource,
     ]);
     $db = $client->selectDatabase('aiorchestrate');
     

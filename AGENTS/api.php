@@ -24,23 +24,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // --- Configuration ---
-// Note: In a production environment, you would use a library like php-dotenv.
-// For this standalone file, we assume getenv() picks up values from the environment.
-$mongoUri = getenv('MONGODB_URI') ?: "mongodb://localhost/aiorchestrate";
-$mongoUser = getenv('MONGODB_USERNAME') ?: "admin";
+// Load .env file from current directory (same as api.php)
+$envFile = __DIR__ . '/.env';
+if (file_exists($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue; // Skip comments
+        if (strpos($line, '=') === false) continue;
+        list($key, $value) = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value, " \t\n\r\0\x0B\"'"); // Trim quotes too
+        putenv("$key=$value");
+    }
+}
+
+$mongoUri = getenv('MONGODB_URI') ?: "mongodb://127.0.0.1:27017/presentify";
+$mongoUser = getenv('MONGODB_USERNAME') ?: "root";
 $mongoPass = getenv('MONGODB_PASSWORD') ?: "password";
+$mongoAuthSource = getenv('MONGODB_AUTH_SOURCE') ?: "admin";
 $jwtSecret = getenv('JWT_SECRET') ?: "default_secret_key";
 
 // --- Database Connection ---
 // Requires: composer require mongodb/mongodb
+$dbError = null;
+$client = null;
 try {
     // Check if class exists to avoid fatal errors if extension is missing
     if (!class_exists('MongoDB\Client')) {
-        throw new Exception("MongoDB PHP Library (mongodb/mongodb) not found.");
+        throw new Exception("MongoDB PHP Library (mongodb/mongodb) not found. Run: composer require mongodb/mongodb");
     }
+    if (!extension_loaded('mongodb')) {
+        throw new Exception("MongoDB PHP extension not loaded. Install with: pecl install mongodb");
+    }
+    
     $client = new MongoDB\Client($mongoUri, [
         'username' => $mongoUser,
         'password' => $mongoPass,
+        'authSource' => $mongoAuthSource,
     ]);
     $db = $client->selectDatabase('aiorchestrate');
     
@@ -49,11 +69,22 @@ try {
     $sessionsCollection = $db->sessions;
     $settingsCollection = $db->settings;
 } catch (Exception $e) {
-    error_log("Database Connection Error: " . $e->getMessage());
+    $dbError = $e->getMessage();
+    error_log("Database Connection Error: " . $dbError);
     // Only return error if not the status endpoint
     if (($_GET['action'] ?? '') !== 'status') {
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Database connection failed.']);
+        echo json_encode([
+            'success' => false, 
+            'error' => 'Database connection failed.',
+            'details' => $dbError,
+            'config' => [
+                'uri' => preg_replace('/\/\/[^:]+:[^@]+@/', '//***:***@', $mongoUri), // Hide credentials
+                'user' => $mongoUser ? '(set)' : '(empty)',
+                'auth_source' => $mongoAuthSource,
+                'env_loaded' => file_exists($envFile) ? 'yes' : 'no'
+            ]
+        ]);
         exit;
     }
 }
@@ -111,14 +142,28 @@ $input = json_decode(file_get_contents('php://input'), true);
 switch ($action) {
     case 'status':
         $dbStatus = false;
+        $dbErrorMsg = $dbError;
         try {
-            $client->listDatabases();
-            $dbStatus = true;
-        } catch (Exception $e) {}
+            if ($client) {
+                $client->listDatabases();
+                $dbStatus = true;
+            }
+        } catch (Exception $e) {
+            $dbErrorMsg = $e->getMessage();
+        }
         jsonResponse([
             'success' => true,
             'api_running' => true,
             'database_connected' => $dbStatus,
+            'database_error' => $dbErrorMsg,
+            'config' => [
+                'mongodb_uri' => preg_replace('/\/\/[^:]+:[^@]+@/', '//***:***@', $mongoUri),
+                'mongodb_user' => $mongoUser ? '(set)' : '(empty)',
+                'mongodb_auth_source' => $mongoAuthSource,
+                'env_file' => file_exists($envFile) ? 'loaded' : 'not found',
+                'mongodb_extension' => extension_loaded('mongodb') ? 'loaded' : 'missing',
+                'mongodb_library' => class_exists('MongoDB\Client') ? 'installed' : 'missing'
+            ],
             'server_time' => date('Y-m-d H:i:s')
         ]);
         break;
