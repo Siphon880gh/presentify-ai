@@ -12,6 +12,7 @@ Presentify is a React-based presentation creation app powered by Gemini AI. User
 - **AI**: Google Gemini API (via `services/geminiService.ts`)
 - **Storage**: IndexedDB + localStorage (via Repository pattern in `services/storageService.ts`)
 - **Export**: jsPDF, pptxgenjs, html2canvas
+- **Backend (Migration Target)**: Plain PHP + MongoDB (implemented in `AGENTS/`)
 
 ## Testing Infrastructure
 
@@ -42,25 +43,24 @@ The app supports multiple local users for in-person testing. All data is stored 
 - `presentations` - Presentation objects with `userId` field for ownership
 - `session` - Per-user current working session (key: `user_{userId}_current`)
 
-### Auth Functions (in storageService.ts)
+## Backend REST API (Migration Source of Truth)
 
-```typescript
-signup(email, password, displayName) -> { success, error?, user? }
-login(email, password) -> { success, error?, user? }
-logout() -> void
-getCurrentUser() -> User | null
-getCurrentUserId() -> string | null
-```
+The server files are located in the `AGENTS/` directory and act as the specification for future frontend-to-remote-API migration.
 
-### User-Scoped Data Access
+### Key Files
+- `AGENTS/api.php`: Plain PHP REST API implementing the full spec (Auth, Presentations, Sessions, Settings).
+- `AGENTS/seed.php`: PHP script to populate the MongoDB instance with test accounts.
+- `.env`: Local configuration for backend services.
 
-All data functions automatically scope to the current user:
-- `getSettings()` / `updateSettings()` - user's preferences
-- `listPresentations()` - only user's presentations
-- `getPresentation(id)` - returns null if not owned by user
-- `savePresentation()` - automatically sets userId
-- `deletePresentation(id)` - verifies ownership before delete
-- `saveCurrentSession()` / `loadCurrentSession()` - user-specific working session
+### API Endpoints
+- `GET ?action=status`: Health check for API and DB connectivity.
+- `POST ?action=signup`: User registration.
+- `POST ?action=login`: User authentication (returns JWT).
+- `GET ?action=me`: Current user details (JWT required).
+- `GET ?action=presentations`: User presentation library.
+- `GET/POST/PUT/DELETE ?action=presentation`: Individual presentation CRUD.
+- `GET/PUT/DELETE ?action=session`: User session state.
+- `GET/PUT ?action=settings`: User preferences.
 
 ## Key Types
 
@@ -87,11 +87,3 @@ interface UserSettings {
   autoplayDelay: number;
 }
 ```
-
-## Specification Documents
-
-| Document | Description |
-|----------|-------------|
-| `specs-user-flows.md` | User journey maps, feature matrix, UI state transitions |
-| `specs-data-persistence.md` | Current client-side storage schema and API |
-| `specs-api-migration.md` | Migration plan for MongoDB + PHP RESTful API backend |
