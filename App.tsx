@@ -751,7 +751,7 @@ const EditorView: React.FC = () => {
               ref={promptRef}
               rows={1}
               placeholder="Topic for a new slideshow..."
-              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2 px-6 pr-32 transition-all outline-none resize-none text-sm"
+              className="w-full bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-0 rounded-2xl py-2 px-6 pr-32 transition-all outline-none resize-none text-sm text-slate-800"
               style={{ minHeight: '34px', maxHeight: '60px' }}
               value={prompt}
               onFocus={() => setIsPromptFocused(true)}
@@ -978,7 +978,7 @@ const EditorView: React.FC = () => {
               <div className="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Speaker Notes</div>
                 <textarea 
-                  className="w-full bg-slate-50 border-transparent focus:bg-white focus:border-indigo-100 rounded-xl p-4 text-sm outline-none resize-none transition-all h-32"
+                  className="w-full bg-slate-50 border-transparent focus:bg-white focus:border-indigo-100 rounded-xl p-4 text-sm outline-none resize-none transition-all h-32 text-slate-800"
                   value={activeSlide.notes || ''}
                   onChange={(e) => updateSlide({ ...activeSlide, notes: e.target.value })}
                   placeholder="Notes for this slide..."
@@ -1000,7 +1000,7 @@ const EditorView: React.FC = () => {
         <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
             <h3 className="text-xl font-bold mb-4">Save Presentation</h3>
-            <input type="text" value={saveName} onChange={(e) => setSaveName(e.target.value)} className="w-full border p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Title..." />
+            <input type="text" value={saveName} onChange={(e) => setSaveName(e.target.value)} className="w-full border p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" placeholder="Title..." />
             <div className="flex justify-end space-x-3">
               <button onClick={() => setShowSaveModal(false)} className="px-6 py-2 text-slate-400">Cancel</button>
               <button onClick={handleSaveToLibrary} className="bg-indigo-600 text-white px-8 py-2 rounded-xl font-bold">Save</button>
@@ -1014,7 +1014,7 @@ const EditorView: React.FC = () => {
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
             <h3 className="text-xl font-bold mb-2">Regenerate Slide</h3>
             <p className="text-xs text-slate-400 mb-4">Tell the AI what to change about this specific slide.</p>
-            <textarea value={regenPrompt} onChange={(e) => setRegenPrompt(e.target.value)} className="w-full border p-3 rounded-xl mb-4 outline-none focus:ring-2 focus:ring-purple-500 h-24 resize-none text-sm" placeholder="e.g., Make it more data-focused, change the tone to professional..." />
+            <textarea value={regenPrompt} onChange={(e) => setRegenPrompt(e.target.value)} className="w-full border p-3 rounded-xl mb-4 outline-none focus:ring-2 focus:ring-purple-500 h-24 resize-none text-sm text-slate-800" placeholder="e.g., Make it more data-focused, change the tone to professional..." />
             
             <div className="flex items-center space-x-3 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
                <input 
@@ -1046,13 +1046,13 @@ const EditorView: React.FC = () => {
                <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">From URL</label>
                  <div className="flex space-x-2">
-                    <input type="text" value={imageInputUrl} onChange={(e) => setImageInputUrl(e.target.value)} className="flex-1 border p-2 rounded-lg text-xs outline-none" placeholder="https://..." />
+                    <input type="text" value={imageInputUrl} onChange={(e) => setImageInputUrl(e.target.value)} className="flex-1 border p-2 rounded-lg text-xs outline-none text-slate-800" placeholder="https://..." />
                     <button onClick={() => handleAddImageElement('url')} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Add</button>
                  </div>
                </div>
                <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Generated</label>
-                 <textarea value={imageAIPrompt} onChange={(e) => setImageAIPrompt(e.target.value)} className="w-full border p-2 rounded-lg text-xs outline-none h-20 resize-none" placeholder="Describe the image you want..." />
+                 <textarea value={imageAIPrompt} onChange={(e) => setImageAIPrompt(e.target.value)} className="w-full border p-2 rounded-lg text-xs outline-none h-20 resize-none text-slate-800" placeholder="Describe the image you want..." />
                  <button onClick={() => handleAddImageElement('ai')} className="w-full bg-purple-600 text-white py-2 rounded-lg text-xs font-bold">Generate & Add</button>
                </div>
                <div className="pt-4 border-t text-center">
@@ -1245,7 +1245,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
         <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
           <section className="space-y-4">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Topic</label>
-            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl p-6 text-lg outline-none focus:ring-2 focus:ring-indigo-100 h-32 resize-none" placeholder="What should this presentation be about?" />
+            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="w-full bg-slate-50 border-none rounded-2xl p-6 text-lg outline-none focus:ring-2 focus:ring-indigo-100 h-32 resize-none text-slate-800" placeholder="What should this presentation be about?" />
           </section>
           
           <div className="grid grid-cols-2 gap-10">
@@ -1267,7 +1267,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                 
                 <div className="space-y-2">
                   <div className="flex space-x-2">
-                    <input type="text" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://..." className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-2 text-xs outline-none" />
+                    <input type="text" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://..." className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-2 text-xs outline-none text-slate-800" />
                     <button onClick={() => { if (urlInput) { setUrls([...urls, urlInput]); setUrlInput(''); } }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Add URL</button>
                   </div>
                   {urls.length > 0 && (
@@ -1374,8 +1374,8 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                   <div className="flex items-center space-x-4">
                     <span className="text-[10px] font-black text-indigo-400 bg-white_w-6 h-6 flex items-center justify-center rounded-full shadow-sm shrink-0">{index + 1}</span>
                     <div className="flex-1 space-y-1">
-                      <input type="text" value={t.title} onChange={(e) => updateTopic(t.id, 'title', e.target.value)} placeholder="Title Focus" className="w-full bg-transparent border-none text-sm font-bold p-0 outline-none" />
-                      <input type="text" value={t.detail} onChange={(e) => updateTopic(t.id, 'detail', e.target.value)} placeholder="Add details or context for this slide..." className="w-full bg-transparent border-none text-xs p-0 outline-none text-slate-500" />
+                      <input type="text" value={t.title} onChange={(e) => updateTopic(t.id, 'title', e.target.value)} placeholder="Title Focus" className="w-full bg-transparent border-none text-sm font-bold p-0 outline-none text-slate-800" />
+                      <input type="text" value={t.detail} onChange={(e) => updateTopic(t.id, 'detail', e.target.value)} placeholder="Add details or context for this slide..." className="w-full bg-transparent border-none text-xs p-0 outline-none text-slate-600" />
                     </div>
                   </div>
                 </div>
