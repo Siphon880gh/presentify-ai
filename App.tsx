@@ -785,6 +785,7 @@ const EditorView: React.FC = () => {
                     ? "Expert-level content with specific data, nuanced insights, and actionable takeaways" 
                     : "Standard professional slides with clean structure and clear messaging"}
                 </p>
+                <p className="text-[10px] text-slate-400 max-w-[200px] leading-relaxed">Want to upload supporting documents, add slide ideas, recommend number of slides? <button onClick={() => setShowPromptWizard(true)} className="text-indigo-600 hover:text-indigo-800 font-medium underline">Open Prompt Wizard</button></p>
               </div>
             )}
             <div className="absolute right-1 flex items-center wizard-dropdown-container"
@@ -1307,7 +1308,6 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                      </button>
                    </div>
                    <p className="text-[10px] text-slate-400">{wizardAdvancedMode ? 'Expert-level content with data points, specific examples, and nuanced insights.' : 'Standard professional presentation with clear structure.'}</p>
-                   <p className="text-[10px] text-slate-400">Want to upload supporting documents, add slide ideas, recommend number of slides? <button onClick={() => setShowPromptWizard(true)} className="text-indigo-600 hover:text-indigo-800 font-medium underline">Open Prompt Wizard</button></p>
                  </div>
 
                  <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
