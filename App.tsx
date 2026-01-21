@@ -151,6 +151,7 @@ const EditorView: React.FC = () => {
   const [savedLibrary, setSavedLibrary] = useState<PresentationMeta[]>([]);
   const [isFullscreenPresenting, setIsFullscreenPresenting] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Edit Mode State
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1385,11 +1386,11 @@ const EditorView: React.FC = () => {
             <div className="flex-1 overflow-y-auto space-y-3">
               {savedLibrary.map(meta => (
                 <div key={meta.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-indigo-50 transition-colors group">
-                  <div>
-                    <div className="font-bold text-slate-800">{meta.title}</div>
+                  <div className="flex-1 min-w-0 mr-4">
+                    <div className="font-bold text-slate-800 truncate">{meta.title}</div>
                     <div className="text-[10px] text-slate-400 uppercase font-black">{meta.slideCount} Slides • Updated {new Date(meta.updatedAt).toLocaleDateString()}</div>
                   </div>
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-2 shrink-0">
                     <button onClick={async () => {
                       const pres = await getPresentation(meta.id);
                       if (pres) {
@@ -1397,13 +1398,61 @@ const EditorView: React.FC = () => {
                         setCurrentSlideIndex(0);
                         setShowOpenModal(false);
                       }
-                    }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Open</button>
+                    }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors">Open</button>
+                    <button 
+                      onClick={() => setDeleteConfirmId(meta.id)} 
+                      className="bg-red-50 text-red-500 px-3 py-2 rounded-lg text-xs font-bold hover:bg-red-100 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
                   </div>
                 </div>
               ))}
               {savedLibrary.length === 0 && <p className="text-center text-slate-400 py-12">No saved presentations yet.</p>}
             </div>
             <button onClick={() => setShowOpenModal(false)} className="mt-6 w-full py-2 text-slate-400 text-sm">Close</button>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-[120] bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-800">Delete Presentation?</h4>
+                <p className="text-xs text-slate-500">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-6">
+              Are you sure you want to delete "<span className="font-bold">{savedLibrary.find(p => p.id === deleteConfirmId)?.title}</span>"?
+            </p>
+            <div className="flex space-x-3">
+              <button 
+                onClick={() => setDeleteConfirmId(null)} 
+                className="flex-1 px-4 py-2 text-slate-600 bg-slate-100 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  const idToDelete = deleteConfirmId;
+                  setDeleteConfirmId(null);
+                  await deletePresentation(idToDelete);
+                  setSavedLibrary(prev => prev.filter(p => p.id !== idToDelete));
+                  if (presentation?.id === idToDelete) {
+                    setPresentation(null);
+                    setCurrentSlideIndex(0);
+                  }
+                }} 
+                className="flex-1 px-4 py-2 text-white bg-red-600 rounded-xl font-bold text-sm hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
