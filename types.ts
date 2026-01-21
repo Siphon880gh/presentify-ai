@@ -17,8 +17,8 @@ export interface FloatingElement {
   id: string;
   type: 'text' | 'image';
   content: string;
-  x: number; // percentage 0-100
-  y: number; // percentage 0-100
+  x: number; // percentage as integer 0-100
+  y: number; // percentage as integer 0-100
   width?: number;
   height?: number;
 }
