@@ -34,9 +34,9 @@ const TestHarness: React.FC = () => {
     });
   }, []);
 
-  const runSignupTest = async () => {
+  const runSignupTest = () => {
     const email = `test_${Math.floor(Math.random() * 1000)}@example.com`;
-    const result = await storage.signup(email, "password123", "Test User");
+    const result = storage.signup(email, "password123", "Test User");
     if (result.success) {
       log(`Signup Success: ${email}`);
       refreshState();
@@ -45,8 +45,8 @@ const TestHarness: React.FC = () => {
     }
   };
 
-  const runLoginTest = async (email: string) => {
-    const result = await storage.login(email, "password123");
+  const runLoginTest = (email: string) => {
+    const result = storage.login(email, "password123");
     if (result.success) {
       log(`Login Success: ${email}`);
       refreshState();

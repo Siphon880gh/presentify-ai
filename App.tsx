@@ -333,14 +333,14 @@ const EditorView: React.FC = () => {
   }, [currentUser?.id]);
 
   // Auth handlers
-  const handleAuthSubmit = async () => {
+  const handleAuthSubmit = () => {
     setAuthError(null);
     if (authMode === 'signup') {
       if (!authDisplayName.trim()) {
         setAuthError('Display name is required');
         return;
       }
-      const result = await signup(authEmail, authPassword, authDisplayName);
+      const result = signup(authEmail, authPassword, authDisplayName);
       if (result.success && result.user) {
         setCurrentUser(result.user);
         setShowAuthModal(false);
@@ -349,7 +349,7 @@ const EditorView: React.FC = () => {
         setAuthError(result.error || 'Signup failed');
       }
     } else {
-      const result = await login(authEmail, authPassword);
+      const result = login(authEmail, authPassword);
       if (result.success && result.user) {
         setCurrentUser(result.user);
         setShowAuthModal(false);
@@ -1607,152 +1607,256 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
   );
 };
 
-// @google/genai Fix: Define PresenterViewProps interface
-interface PresenterViewProps {
-  presentation: Presentation;
-  initialIndex: number;
-  onExit: () => void;
-  autoplayDelay: number;
+interface AudioCacheEntry {
+  notes: string;
+  voiceName: string;
+  buffer: AudioBuffer;
 }
 
-// @google/genai Fix: Implementation of PresenterView component used for full-screen mode
-function PresenterView({ presentation, initialIndex, onExit, autoplayDelay }: PresenterViewProps) {
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [isAutoplay, setIsAutoplay] = useState(false);
-  const [isNarrating, setIsNarrating] = useState(false);
-  const timeoutRef = useRef<number | null>(null);
+const PresenterView: React.FC<{ presentation: Presentation, initialIndex: number, onExit: () => void, autoplayDelay: number }> = ({ presentation, initialIndex, onExit, autoplayDelay }) => {
+  const [index, setIndex] = useState(initialIndex);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+  
   const audioContextRef = useRef<AudioContext | null>(null);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const autoPlayTimerRef = useRef<number | null>(null);
+  const lastGenerationIdRef = useRef(0);
+  const audioCacheRef = useRef<Map<string, AudioCacheEntry>>(new Map());
+  const notesContainerRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
-  const currentSlide = presentation.slides[currentIndex];
+  const clearToast = useCallback(() => setErrorToast(null), []);
+  useEffect(() => {
+    if (errorToast) {
+      const timer = setTimeout(clearToast, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorToast, clearToast]);
 
   const stopAudio = useCallback(() => {
-    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
+    if (currentSourceRef.current) {
+      try { currentSourceRef.current.stop(); } catch (e) {}
+      currentSourceRef.current = null;
     }
-    setIsNarrating(false);
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
   }, []);
 
-  const playNarration = useCallback(async (slide: Slide) => {
+  const stopAutoPlaySession = useCallback(() => {
+    lastGenerationIdRef.current++;
     stopAudio();
-    setIsNarrating(true);
+    if (autoPlayTimerRef.current) {
+      window.clearTimeout(autoPlayTimerRef.current);
+      autoPlayTimerRef.current = null;
+    }
+    setIsAudioLoading(false);
+  }, [stopAudio]);
+
+  const getAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  }, []);
+
+  const fetchAudioBuffer = useCallback(async (slide: Slide): Promise<AudioBuffer | null> => {
+    const notes = slide.notes?.trim();
+    if (!notes) return null;
+
+    const voiceName = slide.voiceName || presentation.defaultVoiceName || 'Zephyr';
+    const cached = audioCacheRef.current.get(slide.id);
+    if (cached && cached.notes === notes && cached.voiceName === voiceName) return cached.buffer;
+
     try {
-      const voice = slide.voiceName || presentation.defaultVoiceName || 'Zephyr';
-      const textToSpeak = slide.notes || slide.title.replace(/<[^>]*>/g, '');
-      const base64 = await speakText(textToSpeak, voice);
-      
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      audioContextRef.current = ctx;
-      
+      const base64 = await speakText(notes, voiceName);
+      const ctx = getAudioContext();
       const buffer = await decodeAudioData(decode(base64), ctx, 24000, 1);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start();
-      
-      source.onended = () => {
-        setIsNarrating(false);
-        if (isAutoplay) {
-          timeoutRef.current = window.setTimeout(() => {
-            if (currentIndex < presentation.slides.length - 1) {
-              setCurrentIndex(prev => prev + 1);
-            } else {
-              setIsAutoplay(false);
-            }
-          }, autoplayDelay);
-        }
-      };
+      audioCacheRef.current.set(slide.id, { notes, voiceName, buffer });
+      return buffer;
     } catch (e) {
-      console.error("Narration failed", e);
-      setIsNarrating(false);
-      if (isAutoplay) {
-        timeoutRef.current = window.setTimeout(() => {
-          if (currentIndex < presentation.slides.length - 1) {
-            setCurrentIndex(prev => prev + 1);
-          } else {
-            setIsAutoplay(false);
-          }
-        }, autoplayDelay);
-      }
+      console.error(`Audio fetch failed for slide ${slide.id}`, e);
+      return null;
     }
-  }, [currentIndex, isAutoplay, presentation.slides.length, presentation.defaultVoiceName, autoplayDelay, stopAudio]);
+  }, [getAudioContext, presentation]);
+
+  const prefetchNext = useCallback(async (currentIndex: number) => {
+    const nextIdx = currentIndex + 1;
+    if (nextIdx < presentation.slides.length) {
+      const nextSlide = presentation.slides[nextIdx];
+      await fetchAudioBuffer(nextSlide);
+    }
+  }, [presentation, fetchAudioBuffer]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') {
+      setIndex(i => Math.min(i + 1, presentation.slides.length - 1));
+      setIsAutoPlaying(false);
+    }
+    if (e.key === 'ArrowLeft') {
+      setIndex(i => Math.max(i - 1, 0));
+      setIsAutoPlaying(false);
+    }
+    if (e.key === 'Escape') onExit();
+  }, [presentation.slides.length, onExit]);
 
   useEffect(() => {
-    if (isAutoplay) {
-      playNarration(currentSlide);
-    }
-    return () => stopAudio();
-  }, [currentIndex, isAutoplay, currentSlide, playNarration, stopAudio]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === ' ') {
-        if (currentIndex < presentation.slides.length - 1) {
-          stopAudio();
-          setCurrentIndex(prev => prev + 1);
-        }
-      } else if (e.key === 'ArrowLeft') {
-        if (currentIndex > 0) {
-          stopAudio();
-          setCurrentIndex(prev => prev - 1);
-        }
-      } else if (e.key === 'Escape') {
-        onExit();
-      }
-    };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, presentation.slides.length, onExit, stopAudio]);
+  }, [handleKeyDown]);
+
+  useEffect(() => {
+    if (!isAutoPlaying) {
+      stopAutoPlaySession();
+      return;
+    }
+
+    const currentSlide = presentation.slides[index];
+    const advance = () => {
+      setIndex(i => {
+        if (i < presentation.slides.length - 1) return i + 1;
+        setIsAutoPlaying(false);
+        return i;
+      });
+    };
+
+    const runPlayback = async () => {
+      const generationId = ++lastGenerationIdRef.current;
+      setIsAudioLoading(true);
+      
+      const buffer = await fetchAudioBuffer(currentSlide);
+      
+      if (generationId !== lastGenerationIdRef.current) return;
+      setIsAudioLoading(false);
+
+      if (buffer) {
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') await ctx.resume();
+        
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        
+        const startTime = ctx.currentTime;
+        const duration = buffer.duration;
+
+        const updateScroll = () => {
+          if (generationId !== lastGenerationIdRef.current) return;
+          const elapsed = ctx.currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          if (notesContainerRef.current) {
+            const container = notesContainerRef.current;
+            container.scrollTop = progress * (container.scrollHeight - container.clientHeight);
+          }
+          if (progress < 1) animationFrameRef.current = requestAnimationFrame(updateScroll);
+        };
+        
+        source.onended = () => {
+          if (currentSourceRef.current === source && isAutoPlaying) {
+            // Wait for configured delay before advancing to next slide
+            autoPlayTimerRef.current = window.setTimeout(advance, autoplayDelay);
+          }
+        };
+
+        currentSourceRef.current = source;
+        source.start();
+        animationFrameRef.current = requestAnimationFrame(updateScroll);
+        
+        // Parallel prefetch next
+        prefetchNext(index);
+      } else {
+        if (currentSlide.notes?.trim()) {
+           setErrorToast("Failed to generate narration. Advancing automatically.");
+        }
+        autoPlayTimerRef.current = window.setTimeout(advance, 10000);
+      }
+    };
+
+    runPlayback();
+    return () => stopAutoPlaySession();
+  }, [index, isAutoPlaying, presentation, stopAutoPlaySession, fetchAudioBuffer, getAudioContext, prefetchNext, autoplayDelay]);
+
+  const currentSlide = presentation.slides[index];
 
   return (
-    <div className="fixed inset-0 bg-slate-950 z-[200] flex flex-col items-center justify-center p-8 overflow-hidden">
-      <div className="w-full max-w-6xl relative group">
-        <SlideRenderer slide={currentSlide} onUpdate={() => {}} isActive={true} />
+    <div className="fixed inset-0 bg-white z-[200] flex flex-col">
+      <div className="flex-1 relative bg-slate-100 flex items-center justify-center p-8 sm:p-12 overflow-hidden">
+        <div className="relative w-full h-full flex items-center justify-center">
+          <div className="w-full max-h-full aspect-video flex items-center justify-center">
+            <SlideRenderer slide={currentSlide} onUpdate={() => {}} isActive={true} />
+          </div>
+        </div>
         
-        <div className="absolute top-4 right-4 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-          <button 
-            onClick={() => setIsAutoplay(!isAutoplay)} 
-            className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-xl ${isAutoplay ? 'bg-amber-500 text-white' : 'bg-white/10 text-white backdrop-blur hover:bg-white/20'}`}
-          >
-            {isAutoplay ? 'Stop Autoplay' : 'Start Autoplay'}
-          </button>
-          <button onClick={onExit} className="bg-white/10 text-white backdrop-blur px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-white/20 shadow-xl">
-            Exit
+        {/* Navigation Overlays */}
+        <div className="absolute inset-y-0 left-0 w-24 flex items-center justify-center group">
+          <button onClick={() => { setIndex(i => Math.max(i - 1, 0)); setIsAutoPlaying(false); }} className="p-4 bg-white/20 hover:bg-white/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all">
+            <svg className="w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 19l-7-7 7-7" strokeWidth={3}/></svg>
           </button>
         </div>
-
-        <div className="absolute bottom-[-60px] left-0 right-0 flex items-center justify-between text-white/30 text-[10px] font-black uppercase tracking-[0.2em] px-4">
-          <div>{presentation.title}</div>
-          <div className="flex items-center space-x-4">
-            {isNarrating && <div className="flex items-center space-x-1"><div className="w-1 h-1 bg-indigo-500 rounded-full animate-ping"/><span className="text-indigo-400">Narrating...</span></div>}
-            <div className="font-mono">{currentIndex + 1} / {presentation.slides.length}</div>
-          </div>
+        <div className="absolute inset-y-0 right-0 w-24 flex items-center justify-center group">
+          <button onClick={() => { setIndex(i => Math.min(i + 1, presentation.slides.length - 1)); setIsAutoPlaying(false); }} className="p-4 bg-white/20 hover:bg-white/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all">
+            <svg className="w-8 h-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 5l7 7-7 7" strokeWidth={3}/></svg>
+          </button>
         </div>
       </div>
       
-      <div className="fixed bottom-12 right-12 flex space-x-4 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-        <button 
-          disabled={currentIndex === 0}
-          onClick={() => { stopAudio(); setCurrentIndex(prev => prev - 1); }}
-          className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center hover:bg-white/20 disabled:opacity-10 transition-all border border-white/10 shadow-2xl"
-        >
-          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15 19l-7-7 7-7" strokeWidth={2}/></svg>
-        </button>
-        <button 
-          disabled={currentIndex === presentation.slides.length - 1}
-          onClick={() => { stopAudio(); setCurrentIndex(prev => prev + 1); }}
-          className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center hover:bg-white/20 disabled:opacity-10 transition-all border border-white/10 shadow-2xl"
-        >
-          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 5l7 7-7 7" strokeWidth={2}/></svg>
-        </button>
+      {/* HUD (Heads Up Display) */}
+      <div className="h-24 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-10 text-white shrink-0">
+        <div className="flex items-center space-x-4">
+          <div className="text-[10px] font-black text-slate-500 uppercase">Slide</div>
+          <div className="text-xl font-mono">{index + 1} / {presentation.slides.length}</div>
+        </div>
+        <div className="flex items-center space-x-12 flex-1 justify-center px-12 h-full py-4">
+          <div 
+            ref={notesContainerRef}
+            className="max-w-xl overflow-y-auto text-slate-400 italic text-sm scroll-smooth custom-scrollbar h-full"
+          >
+            {currentSlide.notes || 'No notes for this slide'}
+          </div>
+        </div>
+        <div className="flex items-center space-x-4 relative">
+          {errorToast && (
+            <div className="absolute bottom-full right-0 mb-4 bg-red-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-2xl animate-in fade-in slide-in-from-bottom-2 whitespace-nowrap">
+              {errorToast}
+            </div>
+          )}
+          <button 
+            onClick={() => setIsAutoPlaying(!isAutoPlaying)} 
+            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'}`}
+          >
+            {isAudioLoading ? (
+              <>
+                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <span>Preloading...</span>
+              </>
+            ) : isAutoPlaying ? (
+              <>
+                <div className="flex space-x-0.5 items-center h-3">
+                  <div className="w-0.5 h-full bg-white animate-pulse"></div>
+                  <div className="w-0.5 h-2/3 bg-white animate-pulse delay-75"></div>
+                  <div className="w-0.5 h-full bg-white animate-pulse delay-150"></div>
+                </div>
+                <span>Playing</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M4.5 3.5a.5.5 0 01.8-.4l11 6.5a.5.5 0 010 .8l-11 6.5a.5.5 0 01-.8-.4v-13z" /></svg>
+                <span>Auto-Play</span>
+              </>
+            )}
+          </button>
+          <button onClick={onExit} className="text-slate-500 hover:text-white transition-colors">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" strokeWidth={2}/></svg>
+          </button>
+        </div>
       </div>
     </div>
   );
-}
+};
 
-// @google/genai Fix: Re-defined App component wrapping routes
-function App() {
+const App: React.FC = () => {
   return (
     <HashRouter>
       <Routes>
@@ -1760,7 +1864,6 @@ function App() {
       </Routes>
     </HashRouter>
   );
-}
+};
 
-// @google/genai Fix: Export App as default to resolve import error in index.tsx
 export default App;
