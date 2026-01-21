@@ -126,9 +126,10 @@ const EditorView: React.FC = () => {
   const [authPassword, setAuthPassword] = useState('');
   const [authDisplayName, setAuthDisplayName] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
 
-  // Load persisted settings (user-aware)
-  const persistedSettings = currentUser ? getSettings() : { defaultAdvancedMode: true, autoplayDelay: 2000 };
+  // Settings state (loaded asynchronously)
+  const [persistedSettings, setPersistedSettings] = useState({ defaultAdvancedMode: true, autoplayDelay: 2000 });
   
   const [prompt, setPrompt] = useState('');
   const [isPromptFocused, setIsPromptFocused] = useState(false);
@@ -295,12 +296,21 @@ const EditorView: React.FC = () => {
       setCurrentUser(user);
       
       if (user) {
-        const { presentation: savedPres, slideIndex } = await loadCurrentSession();
+        const [sessionData, settings] = await Promise.all([
+          loadCurrentSession(),
+          getSettings()
+        ]);
+        
+        const { presentation: savedPres, slideIndex } = sessionData;
         if (savedPres) {
           setPresentation(savedPres);
           setCurrentSlideIndex(slideIndex);
           setLastSaved(new Date().toLocaleTimeString());
         }
+        
+        setPersistedSettings(settings);
+        setIsAdvancedMode(settings.defaultAdvancedMode);
+        setAutoplayDelay(settings.autoplayDelay);
       }
     };
     init();
@@ -320,43 +330,54 @@ const EditorView: React.FC = () => {
           setCurrentSlideIndex(0);
         }
         // Reload settings for new user
-        const settings = getSettings();
+        const settings = await getSettings();
+        setPersistedSettings(settings);
         setIsAdvancedMode(settings.defaultAdvancedMode);
         setAutoplayDelay(settings.autoplayDelay);
       } else {
         // Clear presentation when logged out
         setPresentation(null);
         setCurrentSlideIndex(0);
+        // Reset to default settings
+        setPersistedSettings({ defaultAdvancedMode: true, autoplayDelay: 2000 });
       }
     };
     loadUserData();
   }, [currentUser?.id]);
 
   // Auth handlers
-  const handleAuthSubmit = () => {
+  const handleAuthSubmit = async () => {
     setAuthError(null);
-    if (authMode === 'signup') {
-      if (!authDisplayName.trim()) {
-        setAuthError('Display name is required');
-        return;
-      }
-      const result = signup(authEmail, authPassword, authDisplayName);
-      if (result.success && result.user) {
-        setCurrentUser(result.user);
-        setShowAuthModal(false);
-        resetAuthForm();
+    setAuthLoading(true);
+    try {
+      if (authMode === 'signup') {
+        if (!authDisplayName.trim()) {
+          setAuthError('Display name is required');
+          setAuthLoading(false);
+          return;
+        }
+        const result = await signup(authEmail, authPassword, authDisplayName);
+        if (result.success && result.user) {
+          setCurrentUser(result.user);
+          setShowAuthModal(false);
+          resetAuthForm();
+        } else {
+          setAuthError(result.error || 'Signup failed');
+        }
       } else {
-        setAuthError(result.error || 'Signup failed');
+        const result = await login(authEmail, authPassword);
+        if (result.success && result.user) {
+          setCurrentUser(result.user);
+          setShowAuthModal(false);
+          resetAuthForm();
+        } else {
+          setAuthError(result.error || 'Login failed');
+        }
       }
-    } else {
-      const result = login(authEmail, authPassword);
-      if (result.success && result.user) {
-        setCurrentUser(result.user);
-        setShowAuthModal(false);
-        resetAuthForm();
-      } else {
-        setAuthError(result.error || 'Login failed');
-      }
+    } catch (err) {
+      setAuthError('Network error. Please try again.');
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -1147,9 +1168,17 @@ const EditorView: React.FC = () => {
             <div className="mt-6 flex flex-col space-y-3">
               <button
                 onClick={handleAuthSubmit}
-                className="w-full bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                disabled={authLoading}
+                className="w-full bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
-                {authMode === 'login' ? 'Log In' : 'Create Account'}
+                {authLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Please wait...</span>
+                  </>
+                ) : (
+                  <span>{authMode === 'login' ? 'Log In' : 'Create Account'}</span>
+                )}
               </button>
               
               <div className="text-center text-xs text-slate-400">
