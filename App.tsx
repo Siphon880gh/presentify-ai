@@ -158,6 +158,7 @@ const TooltipButton: React.FC<{
 const EditorView: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [isPromptFocused, setIsPromptFocused] = useState(false);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [presentation, setPresentation] = useState<Presentation | null>(null);
@@ -400,18 +401,22 @@ const EditorView: React.FC = () => {
     useHeaderPrompt = true, 
     overridePrompt?: string, 
     context?: { text: string[], images: {data: string, mimeType: string}[] },
-    isRefiningPresentation = false
+    isRefiningPresentation = false,
+    advancedModeOverride?: boolean
   ) => {
     const targetPrompt = overridePrompt || (useHeaderPrompt ? prompt : (presentation?.title || prompt));
     if (!targetPrompt.trim()) return;
     setIsGenerating(true);
     setStatusMessage(isRefiningPresentation ? 'Refining presentation...' : 'Generating presentation...');
     
+    const useAdvanced = advancedModeOverride !== undefined ? advancedModeOverride : isAdvancedMode;
+    
     try {
       const data = await generatePresentation(
         targetPrompt, 
         context, 
-        isRefiningPresentation ? (presentation || undefined) : undefined
+        isRefiningPresentation ? (presentation || undefined) : undefined,
+        useAdvanced
       );
       const slidesWithIds = data.slides.map((s: any) => ({
         ...s,
@@ -456,7 +461,7 @@ const EditorView: React.FC = () => {
     setCurrentSlideIndex(0);
   };
 
-  const handleWizardSubmit = async () => {
+  const handleWizardSubmit = async (wizardAdvancedMode: boolean) => {
     const countQualifier = wizardSlideMode === 'qualitative' ? 'approximately' : 'exactly';
     let finalPrompt = `Topic: ${wizardPrompt}\nSlide Count: ${countQualifier} ${wizardSlideCount}\n`;
     if (wizardTopics.length > 0) {
@@ -465,7 +470,7 @@ const EditorView: React.FC = () => {
     }
     const contextTexts = wizardFiles.filter(f => !f.isImage).map(f => `FILE: ${f.name}\n${f.content}`);
     const contextImages = wizardFiles.filter(f => f.isImage).map(f => ({ data: f.content, mimeType: f.mimeType }));
-    handleGenerate(false, finalPrompt, { text: contextTexts, images: contextImages }, isGlobalRefine);
+    handleGenerate(false, finalPrompt, { text: contextTexts, images: contextImages }, isGlobalRefine, wizardAdvancedMode);
     setShowPromptWizard(false);
   };
 
@@ -663,7 +668,8 @@ const EditorView: React.FC = () => {
         presentation.title, 
         currentRegenPrompt,
         activeSlide,
-        currentIsRefinement
+        currentIsRefinement,
+        isAdvancedMode
       );
       updateSlide({ ...activeSlide, ...refined });
     } catch (e) {
@@ -749,10 +755,38 @@ const EditorView: React.FC = () => {
               style={{ minHeight: '34px', maxHeight: '60px' }}
               value={prompt}
               onFocus={() => setIsPromptFocused(true)}
-              onBlur={() => setIsPromptFocused(false)}
+              onBlur={() => setTimeout(() => setIsPromptFocused(false), 150)}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleGenerate(true))}
             />
+            
+            {/* Mode Selector Popover */}
+            {isPromptFocused && (
+              <div className="absolute left-0 top-full mt-2 bg-white/95 backdrop-blur shadow-xl rounded-xl border border-slate-200 p-2 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center space-x-1 mb-1.5">
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setIsAdvancedMode(false)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${!isAdvancedMode ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    Simple
+                  </button>
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setIsAdvancedMode(true)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all flex items-center space-x-1.5 ${isAdvancedMode ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth={2.5}/></svg>
+                    <span>Advanced</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 max-w-[200px] leading-relaxed">
+                  {isAdvancedMode 
+                    ? "Expert-level content with specific data, nuanced insights, and actionable takeaways" 
+                    : "Standard professional slides with clean structure and clear messaging"}
+                </p>
+              </div>
+            )}
             <div className="absolute right-1 flex items-center wizard-dropdown-container"
               style={{ "top":"50%", "transform":"translateY(-50%)"}}
             >
@@ -1167,6 +1201,7 @@ const EditorView: React.FC = () => {
           isGlobalRefine={isGlobalRefine}
           setIsGlobalRefine={setIsGlobalRefine}
           hasExistingPresentation={!!presentation}
+          defaultAdvancedMode={isAdvancedMode}
         />
       )}
     </div>
@@ -1174,7 +1209,8 @@ const EditorView: React.FC = () => {
 };
 
 // ... Simplified PromptWizard Component ...
-const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, slideCount, setSlideCount, topics, setTopics, files, setFiles, urls, setUrls, urlInput, setUrlInput, isParsing, onFileUpload, uploadError, slideMode, setSlideMode, isGlobalRefine, setIsGlobalRefine, hasExistingPresentation }) => {
+const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, slideCount, setSlideCount, topics, setTopics, files, setFiles, urls, setUrls, urlInput, setUrlInput, isParsing, onFileUpload, uploadError, slideMode, setSlideMode, isGlobalRefine, setIsGlobalRefine, hasExistingPresentation, defaultAdvancedMode }) => {
+  const [wizardAdvancedMode, setWizardAdvancedMode] = useState(defaultAdvancedMode !== undefined ? defaultAdvancedMode : true);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -1223,7 +1259,7 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
                 </div>
                 <p className="text-[10px] text-slate-400">Supported: .md, .txt, .pdf, .docx, .csv, images</p>
                 {uploadError && <p className="text-[10px] text-red-500 font-bold bg-red-50 p-2 rounded-lg border border-red-100">{uploadError}</p>}
-                <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200 min-h-[80px]">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200 min-h-[225px]">
                   {files.map((f: any) => <div key={f.id} className="text-[10px] bg-white border rounded-lg px-2 py-1 mb-1 truncate flex items-center justify-between">{f.name} <button onClick={() => setFiles(files.filter((file: any) => file.id !== f.id))} className="text-red-400 ml-2">×</button></div>)}
                   {isParsing && <p className="text-[10px] animate-pulse">Parsing...</p>}
                   {files.length === 0 && !isParsing && <p className="text-[10px] text-slate-300 text-center mt-4">No files uploaded</p>}
@@ -1252,6 +1288,27 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Structure & Mode</label>
               
               <div className="bg-white border rounded-2xl p-4 space-y-4">
+                 {/* Generation Quality Mode */}
+                 <div className="space-y-2">
+                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Content Quality</label>
+                   <div className="flex items-center space-x-2 p-1 bg-slate-100 rounded-xl">
+                     <button 
+                       onClick={() => setWizardAdvancedMode(false)} 
+                       className={`flex-1 px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${!wizardAdvancedMode ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                     >
+                       Simple
+                     </button>
+                     <button 
+                       onClick={() => setWizardAdvancedMode(true)} 
+                       className={`flex-1 px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all flex items-center justify-center space-x-1.5 ${wizardAdvancedMode ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                     >
+                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth={2.5}/></svg>
+                       <span>Advanced</span>
+                     </button>
+                   </div>
+                   <p className="text-[10px] text-slate-400">{wizardAdvancedMode ? 'Expert-level content with data points, specific examples, and nuanced insights.' : 'Standard professional presentation with clear structure.'}</p>
+                 </div>
+
                  <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
                     <input 
                       type="checkbox" 
@@ -1330,7 +1387,10 @@ const PromptWizard: React.FC<any> = ({ prompt, setPrompt, onClose, onSubmit, sli
         
         <div className="p-8 border-t bg-slate-50 flex justify-end space-x-4">
           <button onClick={onClose} className="px-6 py-3 text-slate-400 font-bold">Cancel</button>
-          <button onClick={onSubmit} className="bg-indigo-600 text-white px-10 py-3 rounded-2xl font-black shadow-xl shadow-indigo-100">Create Presentation</button>
+          <button onClick={() => onSubmit(wizardAdvancedMode)} className="bg-indigo-600 text-white px-10 py-3 rounded-2xl font-black shadow-xl shadow-indigo-100 flex items-center space-x-2">
+            {wizardAdvancedMode && <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth={2.5}/></svg>}
+            <span>Create Presentation</span>
+          </button>
         </div>
       </div>
     </div>
