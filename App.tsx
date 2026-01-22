@@ -152,6 +152,7 @@ const EditorView: React.FC = () => {
   const [isFullscreenPresenting, setIsFullscreenPresenting] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [saveToast, setSaveToast] = useState<{ status: 'saving' | 'success' | 'error'; message: string } | null>(null);
 
   // Edit Mode State
   const [isEditMode, setIsEditMode] = useState(false);
@@ -622,9 +623,23 @@ const EditorView: React.FC = () => {
   const handleSaveToLibrary = async () => {
     if (!presentation || !saveName.trim() || !currentUser) return;
     const updatedPresentation = { ...presentation, title: saveName.trim(), userId: currentUser.id };
-    await savePresentation(updatedPresentation);
+    
+    // Optimistic UI: close modal and update state immediately
     setPresentation(updatedPresentation);
     setShowSaveModal(false);
+    setSaveToast({ status: 'saving', message: 'Saving…' });
+    
+    // Fire API call in background
+    try {
+      await savePresentation(updatedPresentation);
+      setSaveToast({ status: 'success', message: 'Saved!' });
+      // Auto-hide success toast after 2 seconds
+      setTimeout(() => setSaveToast(null), 2000);
+    } catch (err) {
+      setSaveToast({ status: 'error', message: 'Save failed. Please try again.' });
+      // Keep error toast visible longer
+      setTimeout(() => setSaveToast(null), 4000);
+    }
   };
 
   const handlePreviewVoice = async (voice: string) => {
@@ -1491,6 +1506,34 @@ const EditorView: React.FC = () => {
           hasExistingPresentation={!!presentation}
           defaultAdvancedMode={isAdvancedMode}
         />
+      )}
+
+      {/* Save Toast Notification */}
+      {saveToast && (
+        <div className={`fixed bottom-6 right-6 z-[200] flex items-center space-x-3 px-4 py-3 rounded-xl shadow-lg transition-all animate-in slide-in-from-bottom-2 fade-in duration-200 ${
+          saveToast.status === 'saving' ? 'bg-slate-800 text-white' :
+          saveToast.status === 'success' ? 'bg-green-600 text-white' :
+          'bg-red-600 text-white'
+        }`}>
+          {saveToast.status === 'saving' && (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          )}
+          {saveToast.status === 'success' && (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          )}
+          {saveToast.status === 'error' && (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          )}
+          <span className="text-sm font-bold">{saveToast.message}</span>
+          {saveToast.status !== 'saving' && (
+            <button 
+              onClick={() => setSaveToast(null)} 
+              className="ml-2 hover:opacity-70 transition-opacity"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
